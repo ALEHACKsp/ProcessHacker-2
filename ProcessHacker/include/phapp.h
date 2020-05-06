@@ -1,8 +1,6 @@
 #ifndef PHAPP_H
 #define PHAPP_H
 
-#define PHNT_VERSION PHNT_WIN7
-
 #if !defined(_PHAPP_)
 #define PHAPPAPI __declspec(dllimport)
 #else
@@ -302,6 +300,7 @@ VOID PhShowProcessAffinityDialog(
     );
 
 // begin_phapppub
+_Success_(return)
 PHAPPAPI
 BOOLEAN
 NTAPI
@@ -311,6 +310,15 @@ PhShowProcessAffinityDialog2(
     _Out_ PULONG_PTR NewAffinityMask
     );
 // end_phapppub
+
+PHAPPAPI
+VOID
+NTAPI
+PhShowThreadAffinityDialog(
+    _In_ HWND ParentWindowHandle,
+    _In_ PPH_THREAD_ITEM *Threads,
+    _In_ ULONG NumberOfThreads
+    );
 
 // chcol
 
@@ -352,6 +360,7 @@ PhaChoiceDialog(
 // chproc
 
 // begin_phapppub
+_Success_(return)
 PHAPPAPI
 BOOLEAN
 NTAPI
@@ -417,6 +426,12 @@ HPROPSHEETPAGE PhCreateJobPage(
     _In_ PPH_OPEN_OBJECT OpenObject,
     _In_opt_ PVOID Context,
     _In_opt_ DLGPROC HookProc
+    );
+
+// kdump
+
+VOID PhShowLiveDumpDialog(
+    _In_ HWND ParentWindowHandle
     );
 
 // logwnd
@@ -559,6 +574,15 @@ VOID PhShowRunAsDialog(
     _In_opt_ HANDLE ProcessId
     );
 
+// begin_phapppub
+PHLIBAPI
+BOOLEAN
+NTAPI
+PhShowRunFileDialog(
+    _In_ HWND ParentWindowHandle
+    );
+// end_phapppub
+
 NTSTATUS PhExecuteRunAsCommand(
     _In_ PPH_RUNAS_SERVICE_PARAMETERS Parameters
     );
@@ -627,6 +651,16 @@ PhLoadPngImageFromResource(
     _In_ BOOLEAN RGBAImage
     );
 
+PHAPPAPI
+HBITMAP
+NTAPI
+PhLoadPngImageFromFile(
+    _In_ PWSTR FileName,
+    _In_ UINT Width,
+    _In_ UINT Height,
+    _In_ BOOLEAN RGBAImage
+    );
+
 FORCEINLINE
 HFONT 
 PhCreateFont(
@@ -688,7 +722,7 @@ PhCreateCommonFont(
         return NULL;
 
     if (hwnd)
-        SendMessage(hwnd, WM_SETFONT, (WPARAM)fontHandle, TRUE);
+        SetWindowFont(hwnd, fontHandle, TRUE);
 
     return fontHandle;
 }
@@ -799,12 +833,14 @@ PWSTR PhGetPrivilegeAttributesString(
 VOID PhShowTokenProperties(
     _In_ HWND ParentWindowHandle,
     _In_ PPH_OPEN_OBJECT OpenObject,
+    _In_ HANDLE ProcessId,
     _In_opt_ PVOID Context,
     _In_opt_ PWSTR Title
     );
 
 HPROPSHEETPAGE PhCreateTokenPage(
     _In_ PPH_OPEN_OBJECT OpenObject,
+    _In_ HANDLE ProcessId,
     _In_opt_ PVOID Context,
     _In_opt_ DLGPROC HookProc
     );

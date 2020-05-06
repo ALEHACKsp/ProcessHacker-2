@@ -11,6 +11,8 @@
 #include <d3d11.h>
 #include "d3dkmt.h"
 
+#define PH_RECORD_MAX_USAGE 1
+
 extern PPH_PLUGIN PluginInstance;
 extern LIST_ENTRY EtProcessBlockListHead;
 extern LIST_ENTRY EtNetworkBlockListHead;
@@ -21,6 +23,8 @@ extern ULONG ProcessesUpdatedCount;
 #define PLUGIN_NAME L"ProcessHacker.ExtendedTools"
 #define SETTING_NAME_DISK_TREE_LIST_COLUMNS (PLUGIN_NAME L".DiskTreeListColumns")
 #define SETTING_NAME_DISK_TREE_LIST_SORT (PLUGIN_NAME L".DiskTreeListSort")
+#define SETTING_NAME_ENABLE_GPUPERFCOUNTERS (PLUGIN_NAME L".EnableGpuPerformanceCounters")
+#define SETTING_NAME_ENABLE_DISKEXT (PLUGIN_NAME L".EnableDiskExt")
 #define SETTING_NAME_ENABLE_ETW_MONITOR (PLUGIN_NAME L".EnableEtwMonitor")
 #define SETTING_NAME_ENABLE_GPU_MONITOR (PLUGIN_NAME L".EnableGpuMonitor")
 #define SETTING_NAME_ENABLE_SYSINFO_GRAPHS (PLUGIN_NAME L".EnableSysInfoGraphs")
@@ -37,6 +41,8 @@ extern ULONG ProcessesUpdatedCount;
 #define SETTING_NAME_WSWATCH_WINDOW_POSITION (PLUGIN_NAME L".WsWatchWindowPosition")
 #define SETTING_NAME_WSWATCH_WINDOW_SIZE (PLUGIN_NAME L".WsWatchWindowSize")
 #define SETTING_NAME_WSWATCH_COLUMNS (PLUGIN_NAME L".WsWatchListColumns")
+#define SETTING_NAME_TRAYICON_GUIDS (PLUGIN_NAME L".TrayIconGuids")
+#define SETTING_NAME_ENABLE_FAHRENHEIT (PLUGIN_NAME L".EnableFahrenheit")
 
 // Window messages
 #define ET_WM_SHOWDIALOG (WM_APP + 1)
@@ -71,14 +77,6 @@ NTSTATUS CallGetProcessUnloadedDlls(
     _Out_ PPH_STRING *UnloadedDlls
     );
 
-// Process icon
-
-typedef struct _ET_PROCESS_ICON
-{
-    LONG RefCount;
-    HICON Icon;
-} ET_PROCESS_ICON, *PET_PROCESS_ICON;
-
 // Disk item
 
 #define HISTORY_SIZE 60
@@ -92,9 +90,12 @@ typedef struct _ET_DISK_ITEM
     HANDLE ProcessId;
     PPH_STRING FileName;
     PPH_STRING FileNameWin32;
-
     PPH_STRING ProcessName;
-    PET_PROCESS_ICON ProcessIcon;
+
+    PPH_PROCESS_ITEM ProcessItem;
+    HICON ProcessIcon;
+    BOOLEAN ProcessIconValid;
+
     PPH_PROCESS_RECORD ProcessRecord;
 
     ULONG IoPriority;
@@ -197,6 +198,41 @@ typedef struct _ET_DISK_NODE
 #define ETNETNC_TOTALRATE 14
 #define ETNETNC_MAXIMUM 14
 
+typedef enum _ET_PROCESS_STATISTICS_CATEGORY
+{
+    ET_PROCESS_STATISTICS_CATEGORY_GPU,
+    ET_PROCESS_STATISTICS_CATEGORY_DISK,
+    ET_PROCESS_STATISTICS_CATEGORY_NETWORK,
+    ET_PROCESS_STATISTICS_CATEGORY_MAX
+} ET_PROCESS_STATISTICS_CATEGORY;
+
+typedef enum _ET_PROCESS_STATISTICS_INDEX
+{
+    ET_PROCESS_STATISTICS_INDEX_RUNNINGTIME,
+    ET_PROCESS_STATISTICS_INDEX_CONTEXTSWITCHES,
+    //ET_PROCESS_STATISTICS_INDEX_TOTALNODES,
+    //ET_PROCESS_STATISTICS_INDEX_TOTALSEGMENTS,
+    ET_PROCESS_STATISTICS_INDEX_TOTALDEDICATED,
+    ET_PROCESS_STATISTICS_INDEX_TOTALSHARED,
+    ET_PROCESS_STATISTICS_INDEX_TOTALCOMMIT,
+
+    ET_PROCESS_STATISTICS_INDEX_DISKREADS,
+    ET_PROCESS_STATISTICS_INDEX_DISKREADBYTES,
+    ET_PROCESS_STATISTICS_INDEX_DISKREADBYTESDELTA,
+    ET_PROCESS_STATISTICS_INDEX_DISKWRITES,
+    ET_PROCESS_STATISTICS_INDEX_DISKWRITEBYTES,
+    ET_PROCESS_STATISTICS_INDEX_DISKWRITEBYTESDELTA,
+
+    ET_PROCESS_STATISTICS_INDEX_NETWORKREADS,
+    ET_PROCESS_STATISTICS_INDEX_NETWORKREADBYTES,
+    ET_PROCESS_STATISTICS_INDEX_NETWORKREADBYTESDELTA,
+    ET_PROCESS_STATISTICS_INDEX_NETWORKWRITES,
+    ET_PROCESS_STATISTICS_INDEX_NETWORKWRITEBYTES,
+    ET_PROCESS_STATISTICS_INDEX_NETWORKWRITEBYTESDELTA,
+
+    ET_PROCESS_STATISTICS_INDEX_MAX
+} ET_PROCESS_STATISTICS_INDEX;
+
 // Firewall status
 
 typedef enum _ET_FIREWALL_STATUS
@@ -216,6 +252,8 @@ typedef struct _ET_PROCESS_BLOCK
     LIST_ENTRY ListEntry;
     PPH_PROCESS_ITEM ProcessItem;
 
+    BOOLEAN HaveFirstSample;
+
     ULONG64 DiskReadCount;
     ULONG64 DiskWriteCount;
     ULONG64 NetworkReceiveCount;
@@ -223,8 +261,20 @@ typedef struct _ET_PROCESS_BLOCK
 
     ULONG64 DiskReadRaw;
     ULONG64 DiskWriteRaw;
+    //ULONG64 LastDiskReadValue;
+    //ULONG64 LastDiskWriteValue;
     ULONG64 NetworkReceiveRaw;
     ULONG64 NetworkSendRaw;
+
+    ULONG64 CurrentDiskRead;
+    ULONG64 CurrentDiskWrite;
+    ULONG64 CurrentNetworkSend;
+    ULONG64 CurrentNetworkReceive;
+
+    PH_CIRCULAR_BUFFER_ULONG64 DiskReadHistory;
+    PH_CIRCULAR_BUFFER_ULONG64 DiskWriteHistory;
+    PH_CIRCULAR_BUFFER_ULONG64 NetworkSendHistory;
+    PH_CIRCULAR_BUFFER_ULONG64 NetworkReceiveHistory;
 
     PH_UINT64_DELTA DiskReadDelta;
     PH_UINT64_DELTA DiskReadRawDelta;
@@ -239,18 +289,28 @@ typedef struct _ET_PROCESS_BLOCK
     //PPH_UINT64_DELTA GpuTotalRunningTimeDelta;
     //PPH_CIRCULAR_BUFFER_FLOAT GpuTotalNodesHistory;
 
+    FLOAT CurrentGpuUsage;
+    ULONG CurrentMemUsage;
+    ULONG CurrentMemSharedUsage;
+    ULONG CurrentCommitUsage;
+    PH_CIRCULAR_BUFFER_FLOAT GpuHistory;
+    PH_CIRCULAR_BUFFER_ULONG MemoryHistory;
+    PH_CIRCULAR_BUFFER_ULONG MemorySharedHistory;
+    PH_CIRCULAR_BUFFER_ULONG GpuCommittedHistory;
+
     FLOAT GpuNodeUsage;
     ULONG64 GpuDedicatedUsage;
     ULONG64 GpuSharedUsage;
     ULONG64 GpuCommitUsage;
+    ULONG64 GpuContextSwitches;
 
     PH_UINT32_DELTA HardFaultsDelta;
 
     PH_QUEUED_LOCK TextCacheLock;
     PPH_STRING TextCache[ETPRTNC_MAXIMUM + 1];
     BOOLEAN TextCacheValid[ETPRTNC_MAXIMUM + 1];
-
-    PET_PROCESS_ICON SmallProcessIcon;
+    ULONG ListViewGroupCache[ET_PROCESS_STATISTICS_CATEGORY_MAX + 1];
+    ULONG ListViewRowCache[ET_PROCESS_STATISTICS_INDEX_MAX + 1];
 } ET_PROCESS_BLOCK, *PET_PROCESS_BLOCK;
 
 typedef struct _ET_NETWORK_BLOCK
@@ -304,6 +364,7 @@ VOID EtFormatRate(
 // etwmon
 
 extern BOOLEAN EtEtwEnabled;
+extern ULONG EtEtwStatus;
 
 // etwstat
 
@@ -328,6 +389,10 @@ extern PH_CIRCULAR_BUFFER_ULONG EtNetworkReceiveHistory;
 extern PH_CIRCULAR_BUFFER_ULONG EtNetworkSendHistory;
 extern PH_CIRCULAR_BUFFER_ULONG EtMaxDiskHistory;
 extern PH_CIRCULAR_BUFFER_ULONG EtMaxNetworkHistory;
+#ifdef PH_RECORD_MAX_USAGE
+extern PH_CIRCULAR_BUFFER_ULONG64 PhMaxDiskUsageHistory;
+extern PH_CIRCULAR_BUFFER_ULONG64 PhMaxNetworkUsageHistory;
+#endif
 
 VOID EtEtwStatisticsInitialization(
     VOID
@@ -340,6 +405,7 @@ VOID EtEtwStatisticsUninitialization(
 // etwdisk
 
 extern BOOLEAN EtDiskEnabled;
+extern ULONG EtRunCount;
 
 extern PPH_OBJECT_TYPE EtDiskItemType;
 extern PH_CALLBACK EtDiskItemAddedEvent;
@@ -362,28 +428,6 @@ PET_DISK_ITEM EtReferenceDiskItem(
 
 PPH_STRING EtFileObjectToFileName(
     _In_ PVOID FileObject
-    );
-
-// procicon
-
-PET_PROCESS_ICON EtProcIconCreateProcessIcon(
-    _In_ HICON Icon
-    );
-
-VOID EtProcIconReferenceProcessIcon(
-    _Inout_ PET_PROCESS_ICON ProcessIcon
-    );
-
-VOID EtProcIconDereferenceProcessIcon(
-    _Inout_ PET_PROCESS_ICON ProcessIcon
-    );
-
-PET_PROCESS_ICON EtProcIconReferenceSmallProcessIcon(
-    _Inout_ PET_PROCESS_BLOCK Block
-    );
-
-VOID EtProcIconNotifyProcessDelete(
-    _Inout_ PET_PROCESS_BLOCK Block
     );
 
 // etwprprp
@@ -409,6 +453,7 @@ VOID EtSaveSettingsDiskTreeList(
 // gpumon
 
 extern BOOLEAN EtGpuEnabled;
+extern BOOLEAN EtD3DEnabled;
 extern PPH_LIST EtpGpuAdapterList;
 
 extern ULONG EtGpuTotalNodeCount;
@@ -559,6 +604,10 @@ VOID EtGpuMiniInformationInitializing(
 
 // iconext
 
+VOID EtLoadTrayIconGuids(
+    VOID
+    );
+
 VOID EtRegisterNotifyIcons(
     _In_ PPH_TRAY_ICON_POINTERS Pointers
     );
@@ -608,6 +657,24 @@ VOID EtShowUnloadedDllsDialog(
 VOID EtShowWsWatchDialog(
     _In_ HWND ParentWindowHandle,
     _In_ PPH_PROCESS_ITEM ProcessItem
+    );
+
+// counters
+
+ULONG64 EtLookupProcessGpuEngineUtilization(
+    _In_opt_ HANDLE ProcessId
+    );
+
+ULONG64 EtLookupProcessGpuDedicated(
+    _In_opt_ HANDLE ProcessId
+    );
+
+ULONG64 EtLookupProcessGpuSharedUsage(
+    _In_opt_ HANDLE ProcessId
+    );
+
+ULONG64 EtLookupProcessGpuCommitUsage(
+    _In_opt_ HANDLE ProcessId
     );
 
 #endif

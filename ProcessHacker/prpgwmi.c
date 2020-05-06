@@ -2,7 +2,7 @@
  * Process Hacker -
  *   Process properties: WMI Providor page
  *
- * Copyright (C) 2017 dmex
+ * Copyright (C) 2017-2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -256,7 +256,11 @@ HRESULT PhpQueryWmiProviderFileName(
 
         if (SUCCEEDED(IWbemClassObject_Get(wbemClassObject, L"CLSID", 0, &variant, 0, 0)))
         {
-            clsidString = PhCreateString(variant.bstrVal);
+            if (variant.bstrVal) // returns NULL for some host processes (dmex)
+            {
+                clsidString = PhCreateString(variant.bstrVal);
+            }
+
             VariantClear(&variant);
         }
 
@@ -265,7 +269,7 @@ HRESULT PhpQueryWmiProviderFileName(
 
     // Lookup the GUID in the registry to determine the name and file name.
 
-    if (!PhIsNullOrEmptyString(clsidString))
+    if (clsidString)
     {
         HANDLE keyHandle;
         PPH_STRING keyPath;
@@ -326,7 +330,7 @@ PPH_LIST PhpQueryWmiProviderHostProcess(
     )
 {
     HRESULT status;
-    PPH_LIST providerList;
+    PPH_LIST providerList = NULL;
     PPH_STRING queryString = NULL;
     IWbemLocator* wbemLocator = NULL;
     IWbemServices* wbemServices = NULL;
@@ -480,7 +484,10 @@ static VOID NTAPI PhpWmiProviderUpdateHandler(
 {
     PPH_WMI_CONTEXT context = (PPH_WMI_CONTEXT)Context;
 
-    PostMessage(context->WindowHandle, WM_PH_WMI_UPDATE, 0, 0);
+    if (context && context->Enabled)
+    {
+        PostMessage(context->WindowHandle, WM_PH_WMI_UPDATE, 0, 0);
+    }
 }
 
 VOID PhpClearWmiProviderItems(
@@ -676,7 +683,8 @@ INT_PTR CALLBACK PhpProcessWmiProvidersDlgProc(
                         PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), -1);
                     }
                     PhInsertEMenuItem(menu, PhCreateEMenuItem(0, 4, L"Open &file location", NULL, NULL), -1);
-                    PhInsertEMenuItem(menu, PhCreateEMenuItem(0, 5, L"&Copy", NULL, NULL), -1);
+                    PhInsertEMenuItem(menu, PhCreateEMenuItem(0, IDC_COPY, L"&Copy", NULL, NULL), -1);
+                    PhInsertCopyListViewEMenuItem(menu, IDC_COPY, context->ListViewHandle);
 
                     selectedItem = PhShowEMenu(
                         menu,
@@ -688,10 +696,19 @@ INT_PTR CALLBACK PhpProcessWmiProvidersDlgProc(
                         );
                     PhDestroyEMenu(menu);
 
-                    if (selectedItem && selectedItem->Id != -1)
+                    if (selectedItem && selectedItem->Id != ULONG_MAX)
                     {
                         PPH_WMI_ENTRY entry;
-                        
+                        BOOLEAN handled = FALSE;
+
+                        handled = PhHandleCopyListViewEMenuItem(selectedItem);
+
+                        //if (!handled && PhPluginsEnabled)
+                        //    handled = PhPluginTriggerEMenuItem(&menuInfo, item);
+
+                        if (handled)
+                            break;
+
                         entry = context->WmiProviderList->Items[PtrToUlong(index) - 1];
 
                         switch (selectedItem->Id)
@@ -707,7 +724,7 @@ INT_PTR CALLBACK PhpProcessWmiProvidersDlgProc(
                             break;
                         case 4:
                             {
-                                if (!PhIsNullOrEmptyString(entry->FileName) && RtlDoesFileExists_U(entry->FileName->Buffer))
+                                if (!PhIsNullOrEmptyString(entry->FileName) && PhDoesFileExistsWin32(entry->FileName->Buffer))
                                 {
                                     PhShellExecuteUserString(
                                         hwndDlg,
@@ -735,6 +752,11 @@ INT_PTR CALLBACK PhpProcessWmiProvidersDlgProc(
                                 PhDereferenceObject(string);
 
                                 PhSetDialogFocus(hwndDlg, context->ListViewHandle);
+                            }
+                            break;
+                        case IDC_COPY:
+                            {
+                                PhCopyListView(context->ListViewHandle);
                             }
                             break;
                         }

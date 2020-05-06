@@ -3,7 +3,7 @@
  *   GPU monitoring
  *
  * Copyright (C) 2011-2015 wj32
- * Copyright (C) 2016-2018 dmex
+ * Copyright (C) 2016-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -26,7 +26,8 @@
 #include <ntddvdeo.h>
 #include "gpumon.h"
 
-BOOLEAN EtGpuEnabled;
+BOOLEAN EtGpuEnabled = FALSE;
+BOOLEAN EtD3DEnabled = FALSE;
 PPH_LIST EtpGpuAdapterList;
 static PH_CALLBACK_REGISTRATION ProcessesUpdatedCallbackRegistration;
 
@@ -56,6 +57,8 @@ VOID EtGpuMonitorInitialization(
     VOID
     )
 {
+    EtD3DEnabled = !!PhGetIntegerSetting(SETTING_NAME_ENABLE_GPUPERFCOUNTERS);
+  
     if (PhGetIntegerSetting(SETTING_NAME_ENABLE_GPU_MONITOR))
     {
         EtpGpuAdapterList = PhCreateList(4);
@@ -77,7 +80,7 @@ VOID EtGpuMonitorInitialization(
         PhInitializeCircularBuffer_ULONG64(&EtGpuSharedHistory, sampleCount);
 
         EtGpuNodesTotalRunningTimeDelta = PhAllocateZero(sizeof(PH_UINT64_DELTA) * EtGpuTotalNodeCount);
-        EtGpuNodesHistory = PhAllocate(sizeof(PH_CIRCULAR_BUFFER_FLOAT) * EtGpuTotalNodeCount);
+        EtGpuNodesHistory = PhAllocateZero(sizeof(PH_CIRCULAR_BUFFER_FLOAT) * EtGpuTotalNodeCount);
 
         for (i = 0; i < EtGpuTotalNodeCount; i++)
         {
@@ -124,27 +127,6 @@ BOOLEAN EtCloseAdapterHandle(
     return NT_SUCCESS(D3DKMTCloseAdapter(&closeAdapter));
 }
 
-D3DKMT_DRIVERVERSION EtpGetGpuWddmVersion(
-    _In_ D3DKMT_HANDLE AdapterHandle
-    )
-{
-    D3DKMT_DRIVERVERSION driverVersion;
-
-    memset(&driverVersion, 0, sizeof(D3DKMT_DRIVERVERSION));
-
-    if (NT_SUCCESS(EtQueryAdapterInformation(
-        AdapterHandle,
-        KMTQAITYPE_DRIVERVERSION,
-        &driverVersion,
-        sizeof(D3DKMT_ADAPTERTYPE)
-        )))
-    {
-        return driverVersion;
-    }
-
-    return KMT_DRIVERVERSION_WDDM_1_0;
-}
-
 BOOLEAN EtpIsGpuSoftwareDevice(
     _In_ D3DKMT_HANDLE AdapterHandle
     )
@@ -173,10 +155,10 @@ PPH_STRING EtpGetNodeEngineTypeString(
     _In_ D3DKMT_NODEMETADATA NodeMetaData
     )
 {
-    switch (NodeMetaData.EngineType)
+    switch (NodeMetaData.NodeData.EngineType)
     {
     case DXGK_ENGINE_TYPE_OTHER:
-        return PhCreateString(NodeMetaData.FriendlyName);
+        return PhCreateString(NodeMetaData.NodeData.FriendlyName);
     case DXGK_ENGINE_TYPE_3D:
         return PhCreateString(L"3D");
     case DXGK_ENGINE_TYPE_VIDEO_DECODE:
@@ -195,7 +177,7 @@ PPH_STRING EtpGetNodeEngineTypeString(
         return PhCreateString(L"Crypto");
     }
 
-    return PhFormatString(L"ERROR (%lu)", NodeMetaData.EngineType);
+    return PhFormatString(L"ERROR (%lu)", NodeMetaData.NodeData.EngineType);
 }
 
 PPH_STRING EtpQueryDeviceProperty(
@@ -256,13 +238,25 @@ PPH_STRING EtpQueryDeviceProperty(
     case DEVPROP_TYPE_FILETIME:
         {
             PPH_STRING string;
-            FILETIME newFileTime;
+            PFILETIME fileTime;
+            LARGE_INTEGER time;
             SYSTEMTIME systemTime;
 
-            FileTimeToLocalFileTime((PFILETIME)buffer, &newFileTime);
-            FileTimeToSystemTime(&newFileTime, &systemTime);
+            fileTime = (PFILETIME)buffer;
+            time.HighPart = fileTime->dwHighDateTime;
+            time.LowPart = fileTime->dwLowDateTime;
+
+            PhLargeIntegerToLocalSystemTime(&systemTime, &time);
 
             string = PhFormatDate(&systemTime, NULL);
+
+            //FILETIME newFileTime;
+            //SYSTEMTIME systemTime;
+            //
+            //FileTimeToLocalFileTime((PFILETIME)buffer, &newFileTime);
+            //FileTimeToSystemTime(&newFileTime, &systemTime);
+            //
+            //string = PhFormatDate(&systemTime, NULL);
 
             PhFree(buffer);
             return string;
@@ -372,13 +366,14 @@ ULONG64 EtpQueryGpuInstalledMemory(
     return installedMemory;
 }
 
+_Success_(return)
 BOOLEAN EtQueryDeviceProperties(
     _In_ PWSTR DeviceInterface,
-    _Out_ PPH_STRING *Description,
-    _Out_ PPH_STRING *DriverDate,
-    _Out_ PPH_STRING *DriverVersion,
-    _Out_ PPH_STRING *LocationInfo,
-    _Out_ ULONG64 *InstalledMemory
+    _Out_opt_ PPH_STRING *Description,
+    _Out_opt_ PPH_STRING *DriverDate,
+    _Out_opt_ PPH_STRING *DriverVersion,
+    _Out_opt_ PPH_STRING *LocationInfo,
+    _Out_opt_ ULONG64 *InstalledMemory
     )
 {
     DEVPROPTYPE devicePropertyType;
@@ -738,12 +733,22 @@ VOID EtpUpdateProcessSegmentInformation(
     D3DKMT_QUERYSTATISTICS queryStatistics;
     ULONG64 dedicatedUsage;
     ULONG64 sharedUsage;
+    ULONG64 commitUsage;
+
+    if (EtD3DEnabled && WindowsVersion >= WINDOWS_10_RS5)
+    {
+        Block->GpuDedicatedUsage = EtLookupProcessGpuDedicated(Block->ProcessItem->ProcessId);
+        Block->GpuSharedUsage = EtLookupProcessGpuSharedUsage(Block->ProcessItem->ProcessId);
+        Block->GpuCommitUsage = EtLookupProcessGpuCommitUsage(Block->ProcessItem->ProcessId);
+        return;
+    }
 
     if (!Block->ProcessItem->QueryHandle)
         return;
 
     dedicatedUsage = 0;
     sharedUsage = 0;
+    commitUsage = 0;
 
     for (ULONG i = 0; i < EtpGpuAdapterList->Count; i++)
     {
@@ -774,8 +779,24 @@ VOID EtpUpdateProcessSegmentInformation(
         }
     }
 
+    for (ULONG i = 0; i < EtpGpuAdapterList->Count; i++)
+    {
+        gpuAdapter = EtpGpuAdapterList->Items[i];
+
+        memset(&queryStatistics, 0, sizeof(D3DKMT_QUERYSTATISTICS));
+        queryStatistics.Type = D3DKMT_QUERYSTATISTICS_PROCESS;
+        queryStatistics.AdapterLuid = gpuAdapter->AdapterLuid;
+        queryStatistics.ProcessHandle = Block->ProcessItem->QueryHandle;
+
+        if (NT_SUCCESS(D3DKMTQueryStatistics(&queryStatistics)))
+        {
+            commitUsage += queryStatistics.QueryResult.ProcessInformation.SystemMemory.BytesAllocated;
+        }
+    }
+
     Block->GpuDedicatedUsage = dedicatedUsage;
     Block->GpuSharedUsage = sharedUsage;
+    Block->GpuCommitUsage = commitUsage;
 }
 
 VOID EtpUpdateSystemSegmentInformation(
@@ -829,11 +850,22 @@ VOID EtpUpdateProcessNodeInformation(
     PETP_GPU_ADAPTER gpuAdapter;
     D3DKMT_QUERYSTATISTICS queryStatistics;
     ULONG64 totalRunningTime;
+    ULONG64 totalContextSwitches;
+
+    if (EtD3DEnabled && WindowsVersion >= WINDOWS_10_RS5)
+    {
+        totalRunningTime = EtLookupProcessGpuEngineUtilization(Block->ProcessItem->ProcessId);
+
+        PhUpdateDelta(&Block->GpuRunningTimeDelta, totalRunningTime);
+
+        return;
+    }
 
     if (!Block->ProcessItem->QueryHandle)
         return;
 
     totalRunningTime = 0;
+    totalContextSwitches = 0;
 
     for (ULONG i = 0; i < EtpGpuAdapterList->Count; i++)
     {
@@ -854,11 +886,13 @@ VOID EtpUpdateProcessNodeInformation(
                 //PhUpdateDelta(&Block->GpuTotalRunningTimeDelta[j], runningTime);
 
                 totalRunningTime += queryStatistics.QueryResult.ProcessNodeInformation.RunningTime.QuadPart;
+                totalContextSwitches += queryStatistics.QueryResult.ProcessNodeInformation.ContextSwitch;
             }
         }
     }
 
     PhUpdateDelta(&Block->GpuRunningTimeDelta, totalRunningTime);
+    Block->GpuContextSwitches = totalContextSwitches;
 }
 
 VOID EtpUpdateSystemNodeInformation(
@@ -968,6 +1002,19 @@ VOID NTAPI EtGpuProcessesUpdatedCallback(
 
             if (block->GpuNodeUsage > 1)
                 block->GpuNodeUsage = 1;
+
+            if (runCount != 0)
+            {
+                block->CurrentGpuUsage = block->GpuNodeUsage;
+                block->CurrentMemUsage = (ULONG)(block->GpuDedicatedUsage / PAGE_SIZE);
+                block->CurrentMemSharedUsage = (ULONG)(block->GpuSharedUsage / PAGE_SIZE);
+                block->CurrentCommitUsage = (ULONG)(block->GpuCommitUsage / PAGE_SIZE);
+
+                PhAddItemCircularBuffer_FLOAT(&block->GpuHistory, block->CurrentGpuUsage);
+                PhAddItemCircularBuffer_ULONG(&block->MemoryHistory, block->CurrentMemUsage);
+                PhAddItemCircularBuffer_ULONG(&block->MemorySharedHistory, block->CurrentMemSharedUsage);
+                PhAddItemCircularBuffer_ULONG(&block->GpuCommittedHistory, block->CurrentCommitUsage);
+            }
         }
 
         if (maxNodeValue < block->GpuNodeUsage)

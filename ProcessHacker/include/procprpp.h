@@ -164,8 +164,9 @@ typedef struct _PH_THREADS_CONTEXT
     PH_CALLBACK_REGISTRATION LoadingStateChangedEventRegistration;
 
     HWND WindowHandle;
-    HWND SearchboxHandle;
 // end_phapppub
+    HWND TreeNewHandle;
+    HWND SearchboxHandle;
     PPH_STRING SearchboxText;
     PPH_TN_FILTER_ENTRY FilterEntry;
     union
@@ -195,9 +196,9 @@ typedef struct _PH_MODULES_CONTEXT
     PH_CALLBACK_REGISTRATION UpdatedEventRegistration;
 
     HWND WindowHandle;
-    HWND SearchboxHandle;
 // end_phapppub
-
+    HWND SearchboxHandle;
+    HWND TreeNewHandle;
     union
     {
         PH_MODULE_LIST_CONTEXT ListContext;
@@ -229,8 +230,9 @@ typedef struct _PH_HANDLES_CONTEXT
     PH_CALLBACK_REGISTRATION UpdatedEventRegistration;
 
     HWND WindowHandle;
-    HWND SearchboxHandle;
 // end_phapppub
+    HWND TreeNewHandle;
+    HWND SearchWindowHandle;
 
     union
     {
@@ -258,8 +260,9 @@ typedef struct _PH_MEMORY_CONTEXT
 {
     HANDLE ProcessId;
     HWND WindowHandle;
-    HWND SearchboxHandle;
 // end_phapppub
+    HWND TreeNewHandle;
+    HWND SearchboxHandle;
 
     union
     {
@@ -293,6 +296,7 @@ typedef struct _PH_STATISTICS_CONTEXT
     HWND ListViewHandle;
     BOOLEAN Enabled;
     HANDLE ProcessHandle;
+    PPH_PROCESS_ITEM ProcessItem;
 } PH_STATISTICS_CONTEXT, *PPH_STATISTICS_CONTEXT;
 
 #define WM_PH_PERFORMANCE_UPDATE (WM_APP + 241)
@@ -302,6 +306,7 @@ typedef struct _PH_PERFORMANCE_CONTEXT
     PH_CALLBACK_REGISTRATION ProcessesUpdatedRegistration;
 
     HWND WindowHandle;
+    BOOLEAN Enabled;
 
     PH_GRAPH_STATE CpuGraphState;
     PH_GRAPH_STATE PrivateGraphState;
@@ -310,6 +315,10 @@ typedef struct _PH_PERFORMANCE_CONTEXT
     HWND CpuGraphHandle;
     HWND PrivateGraphHandle;
     HWND IoGraphHandle;
+
+    HWND CpuGroupBox;
+    HWND PrivateBytesGroupBox;
+    HWND IoGroupBox;
 } PH_PERFORMANCE_CONTEXT, *PPH_PERFORMANCE_CONTEXT;
 
 typedef struct _PH_ENVIRONMENT_ITEM
@@ -337,12 +346,14 @@ typedef struct _PH_ENVIRONMENT_CONTEXT
     PH_SORT_ORDER TreeNewSortOrder;
     PH_CM_MANAGER Cm;
 
+    BOOLEAN EnableStateHighlighting;
+
     union
     {
         ULONG Flags;
         struct
         {
-            ULONG EnableStateHighlighting : 1;
+            ULONG Reserved : 1;
             ULONG HideProcessEnvironment : 1;
             ULONG HideUserEnvironment : 1;
             ULONG HideSystemEnvironment : 1;

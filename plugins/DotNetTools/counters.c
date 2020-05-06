@@ -40,7 +40,7 @@ PVOID GetLegacyBlockTableEntry(
         // Directory has offset in bytes of block
         ULONG offsetEntry = IpcBlock->FullIPCHeader.EntryTable[EntryId].Offset;
 
-        return PTR_ADD_OFFSET(IpcBlock, offsetBase + offsetEntry);
+        return PTR_ADD_OFFSET(IpcBlock, UInt32Add32To64(offsetBase, offsetEntry));
     }
     else
     {
@@ -51,7 +51,7 @@ PVOID GetLegacyBlockTableEntry(
         // Directory has offset in bytes of block
         ULONG offsetEntry = IpcBlock->FullIPCHeader.EntryTable[EntryId].Offset;
 
-        return PTR_ADD_OFFSET(IpcBlock, offsetBase + offsetEntry);
+        return PTR_ADD_OFFSET(IpcBlock, UInt32Add32To64(offsetBase, offsetEntry));
     }
 }
 
@@ -169,7 +169,7 @@ PPH_LIST EnumerateAppDomainIpcBlock(
     // If we get here, then hMutex is held by this process.
 
     // Make a copy of the IPC block so that we can gaurantee that it's not changing on us.
-    memcpy(&tempBlock, AppDomainIpcBlock, sizeof(AppDomainEnumerationIPCBlock));
+    memcpy_s(&tempBlock, sizeof(tempBlock), AppDomainIpcBlock, sizeof(AppDomainEnumerationIPCBlock));
 
     // It's possible the process will not have any appdomains.
     if ((tempBlock.ListOfAppDomains == NULL) != (tempBlock.SizeInBytes == 0))
@@ -330,7 +330,7 @@ PPH_LIST EnumerateAppDomainIpcBlockWow64(
     // If we get here, then hMutex is held by this process.
 
     // Make a copy of the IPC block so that we can gaurantee that it's not changing on us.
-    memcpy(&tempBlock, AppDomainIpcBlock, sizeof(AppDomainEnumerationIPCBlock_Wow64));
+    memcpy_s(&tempBlock, sizeof(tempBlock), AppDomainIpcBlock, sizeof(AppDomainEnumerationIPCBlock_Wow64));
 
     // It's possible the process will not have any appdomains.
     if ((tempBlock.ListOfAppDomains == 0) != (tempBlock.SizeInBytes == 0))
@@ -436,9 +436,9 @@ CleanupExit:
     return appDomainsList;
 }
 
+_Success_(return)
 BOOLEAN OpenDotNetPublicControlBlock_V2(
     _In_ HANDLE ProcessId,
-    _Out_ HANDLE* BlockTableHandle,
     _Out_ PVOID* BlockTableAddress
     )
 {
@@ -483,9 +483,9 @@ BOOLEAN OpenDotNetPublicControlBlock_V2(
         PAGE_READONLY
         )))
     {
-        *BlockTableHandle = blockTableHandle;
         *BlockTableAddress = blockTableAddress;
 
+        NtClose(blockTableHandle);
         return TRUE;
     }
 
@@ -498,11 +498,11 @@ BOOLEAN OpenDotNetPublicControlBlock_V2(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN OpenDotNetPublicControlBlock_V4(
     _In_ BOOLEAN IsImmersive,
     _In_ HANDLE ProcessHandle,
     _In_ HANDLE ProcessId,
-    _Out_ HANDLE* BlockTableHandle,
     _Out_ PVOID* BlockTableAddress
     )
 {
@@ -535,35 +535,12 @@ BOOLEAN OpenDotNetPublicControlBlock_V4(
     if (!NT_SUCCESS(RtlAddSIDToBoundaryDescriptor(&boundaryDescriptorHandle, everyoneSIDHandle)))
         goto CleanupExit;
 
-    if (WINDOWS_HAS_IMMERSIVE && IsImmersive)
+    if (IsImmersive && WindowsVersion >= WINDOWS_8)
     {
-        if (NT_SUCCESS(NtOpenProcessToken(ProcessHandle, TOKEN_QUERY, &tokenHandle)))
+        if (NT_SUCCESS(PhOpenProcessToken(ProcessHandle, TOKEN_QUERY, &tokenHandle)))
         {
-            ULONG returnLength = 0;
-
-            if (NtQueryInformationToken(
-                tokenHandle,
-                TokenAppContainerSid,
-                NULL,
-                0,
-                &returnLength
-                ) != STATUS_BUFFER_TOO_SMALL)
-            {
+            if (!NT_SUCCESS(PhQueryTokenVariableSize(tokenHandle, TokenAppContainerSid, &appContainerInfo)))
                 goto CleanupExit;
-            }
-
-            appContainerInfo = PhAllocate(returnLength);
-
-            if (!NT_SUCCESS(NtQueryInformationToken(
-                tokenHandle,
-                TokenAppContainerSid,
-                appContainerInfo,
-                returnLength,
-                &returnLength
-                )))
-            {
-                goto CleanupExit;
-            }
 
             if (!NT_SUCCESS(RtlAddSIDToBoundaryDescriptor(&boundaryDescriptorHandle, appContainerInfo->TokenAppContainer)))
                 goto CleanupExit;
@@ -623,7 +600,6 @@ BOOLEAN OpenDotNetPublicControlBlock_V4(
         goto CleanupExit;
     }
 
-    *BlockTableHandle = blockTableHandle;
     *BlockTableAddress = blockTableAddress;
 
     result = TRUE;
@@ -632,18 +608,17 @@ CleanupExit:
 
     if (!result)
     {
-        if (blockTableHandle)
-        {
-            NtClose(blockTableHandle);
-        }
-
         if (blockTableAddress)
         {
             NtUnmapViewOfSection(NtCurrentProcess(), blockTableAddress);
         }
 
-        *BlockTableHandle = NULL;
         *BlockTableAddress = NULL;
+    }
+
+    if (blockTableHandle)
+    {
+        NtClose(blockTableHandle);
     }
 
     if (tokenHandle)

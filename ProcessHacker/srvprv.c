@@ -84,6 +84,7 @@ typedef struct _PH_SERVICE_QUERY_DATA
 {
     SLIST_ENTRY ListEntry;
     ULONG Stage;
+    SC_HANDLE ServiceManagerHandle;
     PPH_SERVICE_ITEM ServiceItem;
 } PH_SERVICE_QUERY_DATA, *PPH_SERVICE_QUERY_DATA;
 
@@ -165,12 +166,6 @@ BOOLEAN PhServiceProviderInitialization(
         );
 
     RtlInitializeSListHead(&PhpServiceQueryDataListHead);
-
-    if (WindowsVersion >= WINDOWS_8)
-    {
-        SubscribeServiceChangeNotifications_I = PhGetDllProcedureAddress(L"sechost.dll", "SubscribeServiceChangeNotifications", 0);
-        UnsubscribeServiceChangeNotifications_I = PhGetDllProcedureAddress(L"sechost.dll", "UnsubscribeServiceChangeNotifications", 0);
-    }
 
     return TRUE;
 }
@@ -509,9 +504,14 @@ VOID PhpServiceQueryStage1(
     )
 {
     PPH_SERVICE_ITEM serviceItem = Data->Header.ServiceItem;
+    SC_HANDLE serviceManagerHandle = Data->Header.ServiceManagerHandle;
     SC_HANDLE serviceHandle;
 
-    if (serviceHandle = PhOpenService(serviceItem->Name->Buffer, SERVICE_QUERY_CONFIG))
+    if (serviceHandle = OpenService(
+        serviceManagerHandle,
+        serviceItem->Name->Buffer,
+        SERVICE_QUERY_CONFIG
+        ))
     {
         Data->FileName = PhGetServiceRelevantFileName(&serviceItem->Name->sr, serviceHandle);
         CloseServiceHandle(serviceHandle);
@@ -555,13 +555,7 @@ NTSTATUS PhpServiceQueryStage1Worker(
     _In_ PVOID Parameter
     )
 {
-    PPH_SERVICE_QUERY_S1_DATA data;
-    PPH_SERVICE_ITEM serviceItem = (PPH_SERVICE_ITEM)Parameter;
-
-    data = PhAllocate(sizeof(PH_SERVICE_QUERY_S1_DATA));
-    memset(data, 0, sizeof(PH_SERVICE_QUERY_S1_DATA));
-    data->Header.Stage = 1;
-    data->Header.ServiceItem = serviceItem;
+    PPH_SERVICE_QUERY_S1_DATA data = Parameter;
 
     PhpServiceQueryStage1(data);
 
@@ -577,8 +571,7 @@ NTSTATUS PhpServiceQueryStage2Worker(
     PPH_SERVICE_QUERY_S2_DATA data;
     PPH_SERVICE_ITEM serviceItem = (PPH_SERVICE_ITEM)Parameter;
 
-    data = PhAllocate(sizeof(PH_SERVICE_QUERY_S2_DATA));
-    memset(data, 0, sizeof(PH_SERVICE_QUERY_S2_DATA));
+    data = PhAllocateZero(sizeof(PH_SERVICE_QUERY_S2_DATA));
     data->Header.Stage = 2;
     data->Header.ServiceItem = serviceItem;
 
@@ -590,19 +583,20 @@ NTSTATUS PhpServiceQueryStage2Worker(
 }
 
 VOID PhpQueueServiceQueryStage1(
-    _In_ PPH_SERVICE_ITEM ServiceItem
+    _Inout_ PPH_SERVICE_QUERY_S1_DATA Data
     )
 {
+    PPH_SERVICE_ITEM serviceItem = Data->Header.ServiceItem;
     PH_WORK_QUEUE_ENVIRONMENT environment;
-
-    PhReferenceObject(ServiceItem);
 
     PhInitializeWorkQueueEnvironment(&environment);
     environment.BasePriority = THREAD_PRIORITY_BELOW_NORMAL;
     environment.IoPriority = IoPriorityLow;
     environment.PagePriority = MEMORY_PRIORITY_LOW;
 
-    PhQueueItemWorkQueueEx(PhGetGlobalWorkQueue(), PhpServiceQueryStage1Worker, ServiceItem, NULL, &environment);
+    PhReferenceObject(serviceItem);
+
+    PhQueueItemWorkQueueEx(PhGetGlobalWorkQueue(), PhpServiceQueryStage1Worker, Data, NULL, &environment);
 }
 
 VOID PhQueueServiceQueryStage2(
@@ -899,13 +893,21 @@ VOID PhServiceProviderUpdate(
 
                     memset(&data, 0, sizeof(PH_SERVICE_QUERY_S1_DATA));
                     data.Header.Stage = 1;
+                    data.Header.ServiceManagerHandle = scManagerHandle;
                     data.Header.ServiceItem = serviceItem;
                     PhpServiceQueryStage1(&data);
                     PhpFillServiceItemStage1(&data);
                 }
                 else
                 {
-                    PhpQueueServiceQueryStage1(serviceItem);
+                    PPH_SERVICE_QUERY_S1_DATA data;
+
+                    data = PhAllocateZero(sizeof(PH_SERVICE_QUERY_S1_DATA));
+                    data->Header.Stage = 1;
+                    data->Header.ServiceManagerHandle = scManagerHandle;
+                    data->Header.ServiceItem = serviceItem;
+
+                    PhpQueueServiceQueryStage1(data);
                 }
 
                 // Add the service item to the hashtable.
@@ -1059,13 +1061,12 @@ VOID CALLBACK PhpServiceNonPollScNotifyCallback(
                 if (nameLength == 0)
                     break;
 
-                if (name[0] == '/')
+                if (name[0] == L'/')
                 {
                     PPHP_SERVICE_NOTIFY_CONTEXT newNotifyContext;
 
                     // Service creation
-                    newNotifyContext = PhAllocate(sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
-                    memset(newNotifyContext, 0, sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
+                    newNotifyContext = PhAllocateZero(sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
                     newNotifyContext->State = SnAdding;
                     newNotifyContext->ServiceName = PhCreateString(name + 1);
                     InsertTailList(&PhpNonPollServicePendingListHead, &newNotifyContext->ListEntry);
@@ -1129,6 +1130,9 @@ VOID CALLBACK PhpServicePropertyChangeNotifyCallback(
     if (ServiceNotifyFlags == SERVICE_NOTIFY_DELETED)
         return;
 
+    if (!notifyContext)
+        return;
+
     if (notifyContext->JustAddedNotifyRegistration)
     {
         notifyContext->JustAddedNotifyRegistration = FALSE;
@@ -1165,13 +1169,15 @@ NTSTATUS PhpServiceNonPollThreadStart(
         return STATUS_UNSUCCESSFUL;
     }
 
+    if (!(scManagerHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT | SC_MANAGER_ENUMERATE_SERVICE)))
+    {
+        PhpNonPollActive = FALSE;
+        PhpNonPollGate = 1;
+        return STATUS_UNSUCCESSFUL;
+    }
+
     while (TRUE)
     {
-        scManagerHandle = OpenSCManager(NULL, NULL, SC_MANAGER_ENUMERATE_SERVICE);
-
-        if (!scManagerHandle)
-            goto ErrorExit;
-
         if (!(services = PhEnumServices(scManagerHandle, 0, 0, &numberOfServices)))
             goto ErrorExit;
 
@@ -1184,8 +1190,7 @@ NTSTATUS PhpServiceNonPollThreadStart(
 
             if (serviceHandle)
             {
-                notifyContext = PhAllocate(sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
-                memset(notifyContext, 0, sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
+                notifyContext = PhAllocateZero(sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
                 notifyContext->ServiceHandle = serviceHandle;
                 notifyContext->State = SnNotify;
                 notifyContext->ServiceName = PhCreateString(services[i].lpServiceName);
@@ -1195,8 +1200,7 @@ NTSTATUS PhpServiceNonPollThreadStart(
 
         PhFree(services);
 
-        notifyContext = PhAllocate(sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
-        memset(notifyContext, 0, sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
+        notifyContext = PhAllocateZero(sizeof(PHP_SERVICE_NOTIFY_CONTEXT));
         notifyContext->ServiceHandle = scManagerHandle;
         notifyContext->IsServiceManager = TRUE;
         notifyContext->State = SnNotify;
@@ -1248,6 +1252,15 @@ NTSTATUS PhpServiceNonPollThreadStart(
                     __fallthrough;
                 case SnNotify:
                     {
+                        if (notifyContext->NotifyRegistration)
+                        {
+                            if (UnsubscribeServiceChangeNotifications_I && notifyContext->NotifyRegistration)
+                                UnsubscribeServiceChangeNotifications_I(notifyContext->NotifyRegistration);
+
+                            notifyContext->JustAddedNotifyRegistration = FALSE;
+                            notifyContext->NotifyRegistration = NULL;
+                        }
+
                         if (SubscribeServiceChangeNotifications_I && !notifyContext->IsServiceManager)
                         {
                             PSC_NOTIFICATION_REGISTRATION serviceNotifyRegistration;
@@ -1329,11 +1342,11 @@ NTSTATUS PhpServiceNonPollThreadStart(
             listEntry = listEntry->Flink;
             PhpDestroyServiceNotifyContext(notifyContext);
         }
-
-        CloseServiceHandle(scManagerHandle);
     }
 
     NtClose(PhpNonPollEventHandle);
+
+    CloseServiceHandle(scManagerHandle);
 
     return STATUS_SUCCESS;
 
@@ -1350,6 +1363,17 @@ VOID PhpInitializeServiceNonPoll(
 {
     PhpNonPollActive = TRUE;
     PhpNonPollGate = 1; // initially the gate should be open since we only just initialized everything (wj32)
+
+    if (WindowsVersion >= WINDOWS_8)
+    {
+        PVOID sechostHandle;
+
+        if (sechostHandle = LoadLibrary(L"sechost.dll"))
+        {
+            SubscribeServiceChangeNotifications_I = PhGetDllBaseProcedureAddress(sechostHandle, "SubscribeServiceChangeNotifications", 0);
+            UnsubscribeServiceChangeNotifications_I = PhGetDllBaseProcedureAddress(sechostHandle, "UnsubscribeServiceChangeNotifications", 0);
+        }
+    }
 
     PhCreateThread2(PhpServiceNonPollThreadStart, NULL);
 }

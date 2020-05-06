@@ -3,7 +3,7 @@
  *   statusbar main
  *
  * Copyright (C) 2010-2013 wj32
- * Copyright (C) 2011-2018 dmex
+ * Copyright (C) 2011-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -70,17 +70,18 @@ VOID StatusBarLoadSettings(
     PH_STRINGREF part;
 
     settingsString = PhaGetStringSetting(SETTING_NAME_STATUSBAR_CONFIG);
-    remaining = settingsString->sr;
 
-    if (remaining.Length == 0)
+    if (PhIsNullOrEmptyString(settingsString))
     {
         // Load default settings
         StatusBarLoadDefault();
         return;
     }
 
+    remaining = PhGetStringRef(settingsString);
+
     // Query the number of buttons to insert
-    if (!PhSplitStringRefAtChar(&remaining, '|', &part, &remaining))
+    if (!PhSplitStringRefAtChar(&remaining, L'|', &part, &remaining))
     {
         // Load default settings
         StatusBarLoadDefault();
@@ -104,7 +105,7 @@ VOID StatusBarLoadSettings(
         if (remaining.Length == 0)
             break;
 
-        PhSplitStringRefAtChar(&remaining, '|', &idPart, &remaining);
+        PhSplitStringRefAtChar(&remaining, L'|', &idPart, &remaining);
 
         if (PhStringToInteger64(&idPart, 10, &idInteger))
         {
@@ -197,13 +198,15 @@ VOID StatusBarShowMenu(
     )
 {
     PPH_EMENU menu;
+    PPH_EMENU_ITEM menuItem;
     PPH_EMENU_ITEM selectedItem;
     POINT cursorPos;
 
     GetCursorPos(&cursorPos);
 
     menu = PhCreateEMenu();
-    PhInsertEMenuItem(menu, PhCreateEMenuItem(0, COMMAND_ID_ENABLE_SEARCHBOX, L"Customize...", NULL, NULL), -1);
+    menuItem = PhCreateEMenuItem(0, COMMAND_ID_ENABLE_SEARCHBOX, L"Customize...", NULL, NULL);
+    PhInsertEMenuItem(menu, menuItem, ULONG_MAX);
 
     selectedItem = PhShowEMenu(
         menu,
@@ -214,7 +217,7 @@ VOID StatusBarShowMenu(
         cursorPos.y
         );
 
-    if (selectedItem && selectedItem->Id != -1)
+    if (selectedItem && selectedItem->Id != ULONG_MAX)
     {
         StatusBarShowCustomizeDialog();
 
@@ -229,7 +232,6 @@ VOID StatusBarUpdate(
     )
 {
     static ULONG64 lastTickCount = 0;
-
     ULONG count;
     ULONG i;
     HDC hdc;
@@ -237,7 +239,7 @@ VOID StatusBarUpdate(
     ULONG widths[MAX_STATUSBAR_ITEMS];
     WCHAR text[MAX_STATUSBAR_ITEMS][0x80];
 
-    if (ProcessesUpdatedCount < 2)
+    if (ProcessesUpdatedCount != 3)
         return;
 
     if (ResetMaxWidths)
@@ -253,7 +255,7 @@ VOID StatusBarUpdate(
     }
 
     hdc = GetDC(StatusBarHandle);
-    SelectObject(hdc, (HFONT)SendMessage(StatusBarHandle, WM_GETFONT, 0, 0));
+    SelectFont(hdc, GetWindowFont(StatusBarHandle));
 
     // Reset max. widths for Max. CPU Process and Max. I/O Process parts once in a while.
     {
@@ -284,7 +286,7 @@ VOID StatusBarUpdate(
                 PH_FORMAT format[3];
 
                 PhInitFormatS(&format[0], L"CPU usage: ");
-                PhInitFormatF(&format[1], cpuUsage * 100, 2);
+                PhInitFormatF(&format[1], (DOUBLE)cpuUsage * 100, 2);
                 PhInitFormatS(&format[2], L"%");
 
                 PhFormatToBuffer(format, RTL_NUMBER_OF(format), text[count], sizeof(text[count]), NULL);
@@ -399,7 +401,7 @@ VOID StatusBarUpdate(
                         PhInitFormatS(&format[1], L" (");
                         PhInitFormatI64U(&format[2], HandleToUlong(processItem->ProcessId));
                         PhInitFormatS(&format[3], L"): ");
-                        PhInitFormatF(&format[4], processItem->CpuUsage * 100, 2);
+                        PhInitFormatF(&format[4], (DOUBLE)processItem->CpuUsage * 100, 2);
                         PhInitFormatS(&format[5], L"%");
 
                         PhFormatToBuffer(format, RTL_NUMBER_OF(format), text[count], sizeof(text[count]), NULL);
@@ -410,7 +412,7 @@ VOID StatusBarUpdate(
 
                         PhInitFormatSR(&format[0], processItem->ProcessName->sr);
                         PhInitFormatS(&format[1], L": ");
-                        PhInitFormatF(&format[2], processItem->CpuUsage * 100, 2);
+                        PhInitFormatF(&format[2], (DOUBLE)processItem->CpuUsage * 100, 2);
                         PhInitFormatS(&format[3], L"%)");
 
                         PhFormatToBuffer(format, RTL_NUMBER_OF(format), text[count], sizeof(text[count]), NULL);
@@ -473,9 +475,7 @@ VOID StatusBarUpdate(
             {
                 HWND tnHandle;
 
-                tnHandle = GetCurrentTreeNewHandle();
-
-                if (tnHandle)
+                if (tnHandle = GetCurrentTreeNewHandle())
                 {
                     PH_FORMAT format[2];
 
@@ -498,9 +498,7 @@ VOID StatusBarUpdate(
             {
                 HWND tnHandle;
 
-                tnHandle = GetCurrentTreeNewHandle();
-
-                if (tnHandle)
+                if (tnHandle = GetCurrentTreeNewHandle())
                 {
                     ULONG i;
                     ULONG visibleCount;

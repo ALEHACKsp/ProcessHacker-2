@@ -32,8 +32,8 @@ typedef struct
 {
     ULONG PID;
     ULONG size;
-    ULONG daddr;
-    ULONG saddr;
+    IN_ADDR daddr;
+    IN_ADDR saddr;
     USHORT dport;
     USHORT sport;
 } TcpIpOrUdpIp_IPV4_Header;
@@ -123,10 +123,6 @@ VOID EtProcessDiskEvent(
 
 VOID EtProcessNetworkEvent(
     _In_ PET_ETW_NETWORK_EVENT Event
-    );
-
-VOID EtUpdateProcessInformation(
-    VOID
     );
 
 HANDLE EtThreadIdToProcessId(

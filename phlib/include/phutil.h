@@ -142,44 +142,45 @@ PhCenterWindow(
     _In_opt_ HWND ParentWindowHandle
     );
 
-FORCEINLINE
-VOID
-PhLargeIntegerToSystemTime(
-    _Out_ PSYSTEMTIME SystemTime,
-    _In_ PLARGE_INTEGER LargeInteger
-    )
-{
-    FILETIME fileTime;
-
-    fileTime.dwLowDateTime = LargeInteger->LowPart;
-    fileTime.dwHighDateTime = LargeInteger->HighPart;
-    FileTimeToSystemTime(&fileTime, SystemTime);
-}
-
-FORCEINLINE
-VOID
-PhLargeIntegerToLocalSystemTime(
-    _Out_ PSYSTEMTIME SystemTime,
-    _In_ PLARGE_INTEGER LargeInteger
-    )
-{
-    FILETIME fileTime;
-    FILETIME newFileTime;
-
-    fileTime.dwLowDateTime = LargeInteger->LowPart;
-    fileTime.dwHighDateTime = LargeInteger->HighPart;
-    FileTimeToLocalFileTime(&fileTime, &newFileTime);
-    FileTimeToSystemTime(&newFileTime, SystemTime);
-}
-
 // NLS
 
-LCID PhGetSystemDefaultLCID(
+PHLIBAPI
+LANGID
+NTAPI
+PhGetUserDefaultLangID(
     VOID
     );
 
-LCID PhGetUserDefaultLCID(
+PHLIBAPI
+LCID
+NTAPI
+PhGetSystemDefaultLCID(
     VOID
+    );
+
+PHLIBAPI
+LCID
+NTAPI
+PhGetUserDefaultLCID(
+    VOID
+    );
+
+// Time
+
+PHLIBAPI
+VOID
+NTAPI
+PhLargeIntegerToSystemTime(
+    _Out_ PSYSTEMTIME SystemTime,
+    _In_ PLARGE_INTEGER LargeInteger
+    );
+
+PHLIBAPI
+VOID
+NTAPI
+PhLargeIntegerToLocalSystemTime(
+    _Out_ PSYSTEMTIME SystemTime,
+    _In_ PLARGE_INTEGER LargeInteger
     );
 
 // Error messages
@@ -278,6 +279,7 @@ PhShowConfirmMessage(
     );
 
 PHLIBAPI
+_Success_(return)
 BOOLEAN
 NTAPI
 PhFindIntegerSiKeyValuePairs(
@@ -288,6 +290,7 @@ PhFindIntegerSiKeyValuePairs(
     );
 
 PHLIBAPI
+_Success_(return)
 BOOLEAN
 NTAPI
 PhFindStringSiKeyValuePairs(
@@ -526,6 +529,7 @@ typedef struct _PH_IMAGE_VERSION_INFO
 } PH_IMAGE_VERSION_INFO, *PPH_IMAGE_VERSION_INFO;
 
 PHLIBAPI
+_Success_(return)
 BOOLEAN
 NTAPI
 PhInitializeImageVersionInfo(
@@ -551,6 +555,7 @@ PhFormatImageVersionInfo(
     );
 
 PHLIBAPI
+_Success_(return)
 BOOLEAN
 NTAPI
 PhInitializeImageVersionInfoCached(
@@ -621,32 +626,6 @@ PhGetSystemRoot(
 PHLIBAPI
 PPH_STRING
 NTAPI
-PhGetDllFileName(
-    _In_ PVOID DllBase,
-    _Out_opt_ PULONG IndexOfFileName
-    );
-
-PHLIBAPI
-PVOID
-NTAPI
-PhGetDllBaseProcedureAddress(
-    _In_ PVOID DllBase,
-    _In_opt_ PSTR ProcedureName,
-    _In_opt_ USHORT ProcedureNumber
-    );
-
-PHLIBAPI
-PVOID
-NTAPI
-PhGetDllProcedureAddress(
-    _In_ PWSTR DllEntryName,
-    _In_opt_ PSTR ProcedureName,
-    _In_opt_ USHORT ProcedureNumber
-    );
-
-PHLIBAPI
-PPH_STRING
-NTAPI
 PhGetApplicationFileName(
     VOID
     );
@@ -690,7 +669,9 @@ typedef struct _PH_CREATE_PROCESS_INFO
 #define PH_CREATE_PROCESS_SUSPENDED 0x4
 #define PH_CREATE_PROCESS_BREAKAWAY_FROM_JOB 0x8
 #define PH_CREATE_PROCESS_NEW_CONSOLE 0x10
-#define PH_CREATE_PROCESS_EXTENDED_STARTUPINFO 0x20
+#define PH_CREATE_PROCESS_DEBUG 0x20
+#define PH_CREATE_PROCESS_DEBUG_ONLY_THIS_PROCESS 0x40
+#define PH_CREATE_PROCESS_EXTENDED_STARTUPINFO 0x80
 
 PHLIBAPI
 NTSTATUS
@@ -789,7 +770,7 @@ PHLIBAPI
 VOID
 NTAPI
 PhShellExecute(
-    _In_ HWND hWnd,
+    _In_opt_ HWND hWnd,
     _In_ PWSTR FileName,
     _In_opt_ PWSTR Parameters
     );
@@ -799,6 +780,7 @@ PhShellExecute(
 #define PH_SHELL_EXECUTE_NOZONECHECKS 0x4
 
 PHLIBAPI
+_Success_(return)
 BOOLEAN
 NTAPI
 PhShellExecuteEx(
@@ -1123,6 +1105,13 @@ PhCreateCacheFile(
 PHLIBAPI
 VOID
 NTAPI
+PhClearCacheDirectory(
+    VOID
+    );
+
+PHLIBAPI
+VOID
+NTAPI
 PhDeleteCacheFile(
     _In_ PPH_STRING FileName
     );
@@ -1134,6 +1123,7 @@ PhGetNamespaceHandle(
     VOID
     );
 
+_Success_(return)
 PHLIBAPI
 BOOLEAN
 NTAPI
@@ -1143,6 +1133,14 @@ PhLoadResource(
     _In_ PCWSTR Type,
     _Out_opt_ ULONG *ResourceLength,
     _Out_ PVOID *ResourceBuffer
+    );
+
+PHLIBAPI
+HMENU
+NTAPI
+PhLoadMenu(
+    _In_ PVOID DllBase,
+    _In_ PWSTR MenuName
     );
 
 PHLIBAPI
@@ -1161,6 +1159,7 @@ PhExtractIcon(
     _Out_opt_ HICON *IconSmall
     );
 
+_Success_(return)
 PHLIBAPI
 BOOLEAN
 NTAPI
@@ -1172,12 +1171,34 @@ PhExtractIconEx(
     );
 
 PHLIBAPI
+HWND
+NTAPI
+PhHungWindowFromGhostWindow(
+    _In_ HWND WindowHandle
+    );
+
+PHLIBAPI
 PLDR_DATA_TABLE_ENTRY
 NTAPI
 PhFindLoaderEntry(
     _In_opt_ PVOID DllBase,
     _In_opt_ PPH_STRINGREF FullDllName,
     _In_opt_ PPH_STRINGREF BaseDllName
+    );
+
+PHLIBAPI
+PPH_STRING
+NTAPI
+PhGetDllFileName(
+    _In_ PVOID DllBase,
+    _Out_opt_ PULONG IndexOfFileName
+    );
+
+PHLIBAPI
+PVOID
+NTAPI
+PhGetLoaderEntryDllBase(
+    _In_ PWSTR DllName
     );
 
 PHLIBAPI
@@ -1196,13 +1217,6 @@ PhGetDllProcedureAddress(
     _In_ PWSTR DllName,
     _In_opt_ PSTR ProcedureName,
     _In_opt_ USHORT ProcedureNumber
-    );
-
-PHLIBAPI
-PVOID
-NTAPI
-PhGetLoaderEntryDllBase(
-    _In_ PWSTR DllName
     );
 
 PHLIBAPI
@@ -1228,12 +1242,31 @@ PhGetLoaderEntryImageDirectory(
 PHLIBAPI
 NTSTATUS
 NTAPI
-PhGetLoaderEntryImageSection(
+PhGetLoaderEntryImageVaToSection(
     _In_ PVOID BaseAddress,
     _In_ PIMAGE_NT_HEADERS ImageNtHeader,
-    _In_ PVOID ImageDirectory,
+    _In_ PVOID ImageDirectoryAddress,
+    _Out_ PVOID *ImageSectionAddress,
+    _Out_ SIZE_T *ImageSectionLength
+    );
+
+PHLIBAPI
+NTSTATUS
+NTAPI
+PhLoaderEntryImageRvaToSection(
+    _In_ PIMAGE_NT_HEADERS ImageNtHeader,
+    _In_ ULONG Rva,
     _Out_ PIMAGE_SECTION_HEADER *ImageSection,
     _Out_ SIZE_T *ImageSectionLength
+    );
+
+PHLIBAPI
+NTSTATUS
+NTAPI
+PhLoaderEntryImageRvaToVa(
+    _In_ PVOID BaseAddress,
+    _In_ ULONG Rva,
+    _Out_ PVOID *Va
     );
 
 PHLIBAPI
@@ -1273,17 +1306,30 @@ PhLoadAllImportsForDll(
     );
 
 PHLIBAPI
-PPH_STRING
+PVOID
 NTAPI
 PhGetFileText(
-    _In_ HANDLE FileHandle
+    _In_ HANDLE FileHandle,
+    _In_ BOOLEAN Unicode
     );
 
 PHLIBAPI
-PPH_STRING
+PVOID
 NTAPI
 PhFileReadAllText(
-    _In_ PWSTR FileName
+    _In_ PWSTR FileName,
+    _In_ BOOLEAN Unicode
+    );
+
+_Success_(return == S_OK)
+PHLIBAPI
+HRESULT
+NTAPI
+PhGetClassObject(
+    _In_ PWSTR DllName,
+    _In_ REFCLSID Rclsid,
+    _In_ REFIID Riid,
+    _Out_ PVOID* Ppv
     );
 
 #ifdef __cplusplus

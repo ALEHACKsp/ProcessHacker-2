@@ -3,7 +3,7 @@
  *   main program
  *
  * Copyright (C) 2011 wj32
- * Copyright (C) 2017 dmex
+ * Copyright (C) 2017-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -24,7 +24,6 @@
 #include "wndexp.h"
 #include "resource.h"
 
-BOOLEAN IsHookClient;
 PPH_PLUGIN PluginInstance;
 PH_CALLBACK_REGISTRATION PluginLoadCallbackRegistration;
 PH_CALLBACK_REGISTRATION PluginUnloadCallbackRegistration;
@@ -49,7 +48,7 @@ VOID NTAPI UnloadCallback(
     NOTHING;
 }
 
-BOOL CALLBACK WepEnumDesktopProc(
+static BOOL CALLBACK WepEnumDesktopProc(
     _In_ LPTSTR lpszDesktop,
     _In_ LPARAM lParam
     )
@@ -65,6 +64,9 @@ VOID NTAPI MenuItemCallback(
     )
 {
     PPH_PLUGIN_MENU_ITEM menuItem = Parameter;
+
+    if (!menuItem)
+        return;
 
     switch (menuItem->Id)
     {
@@ -131,17 +133,20 @@ VOID NTAPI MainMenuInitializingCallback(
     _In_opt_ PVOID Context
     )
 {
+    PPH_PLUGIN_MENU_INFORMATION menuInfo = Parameter;
     ULONG insertIndex;
     PPH_EMENU_ITEM menuItem;
-    PPH_PLUGIN_MENU_INFORMATION menuInfo = Parameter;
+
+    if (!menuInfo)
+        return;
 
     if (menuInfo->u.MainMenu.SubMenuIndex != PH_MENU_ITEM_LOCATION_VIEW)
         return;
 
-    if (menuItem = PhFindEMenuItem(menuInfo->Menu, PH_EMENU_FIND_STARTSWITH, L"System Information", 0))
+    if (menuItem = PhFindEMenuItem(menuInfo->Menu, 0, NULL, PHAPP_ID_VIEW_SYSTEMINFORMATION))
         insertIndex = PhIndexOfEMenuItem(menuInfo->Menu, menuItem) + 1;
     else
-        insertIndex = 0;
+        insertIndex = ULONG_MAX;
 
     PhInsertEMenuItem(menuInfo->Menu, menuItem = PhPluginCreateEMenuItem(PluginInstance, 0, ID_VIEW_WINDOWS, L"&Windows", NULL), insertIndex);
 
@@ -159,6 +164,9 @@ VOID NTAPI ProcessPropertiesInitializingCallback(
     )
 {
     PPH_PLUGIN_PROCESS_PROPCONTEXT propContext = Parameter;
+
+    if (!propContext)
+        return;
 
     if (
         propContext->ProcessItem->ProcessId != SYSTEM_IDLE_PROCESS_ID && 
@@ -183,18 +191,21 @@ VOID NTAPI ThreadMenuInitializingCallback(
     ULONG insertIndex;
     PPH_EMENU_ITEM menuItem;
 
+    if (!menuInfo)
+        return;
+
     if (menuInfo->u.Thread.NumberOfThreads == 1)
         threadItem = menuInfo->u.Thread.Threads[0];
     else
         threadItem = NULL;
 
-    if (menuItem = PhFindEMenuItem(menuInfo->Menu, 0, L"Token", 0))
+    if (menuItem = PhFindEMenuItem(menuInfo->Menu, 0, NULL, PHAPP_ID_THREAD_TOKEN))
         insertIndex = PhIndexOfEMenuItem(menuInfo->Menu, menuItem) + 1;
     else
-        insertIndex = 0;
+        insertIndex = ULONG_MAX;
 
-    PhInsertEMenuItem(menuInfo->Menu, menuItem = PhPluginCreateEMenuItem(PluginInstance, 0, ID_THREAD_WINDOWS,
-        L"&Windows", threadItem), insertIndex);
+    menuItem = PhPluginCreateEMenuItem(PluginInstance, 0, ID_THREAD_WINDOWS, L"&Windows", threadItem);
+    PhInsertEMenuItem(menuInfo->Menu, menuItem, insertIndex);
 
     if (!threadItem) menuItem->Flags |= PH_EMENU_DISABLED;
 }
@@ -221,6 +232,7 @@ LOGICAL DllMain(
                 { ScalableIntegerPairSettingType, SETTING_NAME_WINDOWS_PROPERTY_SIZE, L"@96|690,540" },
                 { StringSettingType, SETTING_NAME_WINDOWS_PROPLIST_COLUMNS, L"" },
                 { StringSettingType, SETTING_NAME_WINDOWS_PROPSTORAGE_COLUMNS, L"" },
+                { IntegerSettingType, SETTING_NAME_WINDOW_ENUM_ALTERNATE, L"0" }
             };
 
             PluginInstance = PhRegisterPlugin(PLUGIN_NAME, Instance, &info);

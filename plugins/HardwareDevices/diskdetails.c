@@ -2,7 +2,7 @@
  * Process Hacker Plugins -
  *   Hardware Devices Plugin
  *
- * Copyright (C) 2016-2019 dmex
+ * Copyright (C) 2016-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -76,77 +76,27 @@ VOID DiskDriveAddListViewItemGroups(
     //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ROOT_INDEX_READ_BYTES, L"RootIndex read bytes", NULL);
     //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ROOT_INDEX_WRITE_BYTES, L"RootIndex write bytes", NULL);
 
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_READS, L"Bitmap reads", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES, L"Bitmap writes", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_READ_BYTES, L"Bitmap read bytes", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITE_BYTES, L"Bitmap write bytes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_READS, L"Bitmap reads", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES, L"Bitmap writes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_READ_BYTES, L"Bitmap read bytes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITE_BYTES, L"Bitmap write bytes", NULL);
 
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_READS, L"Mft bitmap reads", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_WRITES, L"Mft bitmap writes", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_READ_BYTES, L"Mft bitmap read bytes", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_WRITE_BYTES, L"Mft bitmap write bytes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_READS, L"Mft bitmap reads", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_WRITES, L"Mft bitmap writes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_READ_BYTES, L"Mft bitmap read bytes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_WRITE_BYTES, L"Mft bitmap write bytes", NULL);
 
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_USER_INDEX_READS, L"User Index reads", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_USER_INDEX_WRITES, L"User Index writes", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_USER_INDEX_READ_BYTES, L"User Index read bytes", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_USER_INDEX_WRITE_BYTES, L"User Index write bytes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_USER_INDEX_READS, L"User Index reads", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_USER_INDEX_WRITES, L"User Index writes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_USER_INDEX_READ_BYTES, L"User Index read bytes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_USER_INDEX_WRITE_BYTES, L"User Index write bytes", NULL);
 
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_READS, L"LogFile reads", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_WRITES, L"LogFile writes", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_READ_BYTES, L"LogFile read bytes", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_WRITE_BYTES, L"LogFile write bytes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_READS, L"LogFile reads", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_WRITES, L"LogFile writes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_READ_BYTES, L"LogFile read bytes", NULL);
+    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_WRITE_BYTES, L"LogFile write bytes", NULL);
 
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_WRITE, L"MftWritesUserLevel-Write", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_CREATE, L"MftWritesUserLevel-Create", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_SETINFO, L"MftWritesUserLevel-SetInfo", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_FLUSH, L"MftWritesUserLevel-Flush", NULL);
-
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_WRITES_FLUSH_LOGFILE, L"MftWritesFlushForLogFileFull", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_WRITES_LAZY_WRITER, L"MftWritesLazyWriter", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_WRITES_USER_REQUEST, L"MftWritesUserRequest", NULL);
-
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_WRITES, L"Mft2Writes", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_WRITE_BYTES, L"Mft2WriteBytes", NULL);
-
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_USER_LEVEL_WRITE, L"Mft2WritesUserLevel-Write", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_USER_LEVEL_CREATE, L"Mft2WritesUserLevel-Create", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_USER_LEVEL_SETINFO, L"Mft2WritesUserLevel-SetInfo", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_USER_LEVEL_FLUSH, L"Mft2WritesUserLevel-Flush", NULL);
-
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_WRITES_FLUSH_LOGFILE, L"Mft2WritesFlushForLogFileFull", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_WRITES_LAZY_WRITER, L"Mft2WritesLazyWriter", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT2_WRITES_USER_REQUEST, L"Mft2WritesUserRequest", NULL);
-
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_FLUSH_LOGFILE, L"BitmapWritesFlushForLogFileFull", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_LAZY_WRITER, L"BitmapWritesLazyWriter", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_USER_REQUEST, L"BitmapWritesUserRequest", NULL);
-
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_WRITE, L"BitmapWritesUserLevel-Write", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_CREATE, L"BitmapWritesUserLevel-Create", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_SETINFO, L"BitmapWritesUserLevel-SetInfo", NULL);
-
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_FLUSH_LOGFILE, L"MftBitmapWritesFlushForLogFileFull", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_LAZY_WRITER, L"MftBitmapWritesLazyWriter", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_REQUEST, L"MftBitmapWritesUserRequest", NULL);
-
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_WRITE, L"MftBitmapWritesUserLevel-Write", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_CREATE, L"MftBitmapWritesUserLevel-Create", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_SETINFO, L"MftBitmapWritesUserLevel-SetInfo", NULL);
-    //PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_FLUSH, L"MftBitmapWritesUserLevel-Flush", NULL);
-
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CALLS, L"Allocate-Calls", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CLUSTERS, L"Allocate-Clusters", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_HINTS, L"Allocate-Hints", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_RUNS_RETURNED, L"Allocate-RunsReturned", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_HITS_HONORED, L"Allocate-HintsHonored", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_HITS_CLUSTERS, L"Allocate-HintsClusters", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE, L"Allocate-Cache", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_CLUSTERS, L"Allocate-CacheClusters", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_MISS, L"Allocate-CacheMiss", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_MISS_CLUSTERS, L"Allocate-CacheMissClusters", NULL);
-
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_LOGFILE_EXCEPTIONS, L"LogFileFullExceptions", NULL);
-    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_OTHER_EXCEPTIONS, L"OtherExceptions", NULL);
+    PhAddListViewGroupItem(ListViewHandle, DiskGroupId, DISKDRIVE_DETAILS_INDEX_OTHER_EXCEPTIONS, L"Exceptions", NULL);
 }
 
 VOID DiskDriveQuerySmart(
@@ -156,7 +106,7 @@ VOID DiskDriveQuerySmart(
     PPH_LIST attributes;
     HANDLE deviceHandle;
 
-    if (NT_SUCCESS(PhCreateFileWin32(
+    if (NT_SUCCESS(PhCreateFile(
         &deviceHandle,
         PhGetString(Context->PageContext->DiskId.DevicePath),
         FILE_READ_ATTRIBUTES | SYNCHRONIZE,
@@ -209,6 +159,19 @@ VOID DiskDriveQuerySmart(
                         );
                 }
 
+                //PhSetListViewSubItem(
+                //    Context->ListViewHandle,
+                //    lvItemIndex,
+                //    5,
+                //    PhaFormatString(L"%lu", attribute->Advisory)->Buffer
+                //    );
+                //PhSetListViewSubItem(
+                //    Context->ListViewHandle,
+                //    lvItemIndex,
+                //    6,
+                //    PhaFormatString(L"%lu", attribute->FailureImminent)->Buffer
+                //    );
+
                 PhFree(attribute);
             }
 
@@ -260,13 +223,18 @@ VOID DiskDriveQueryFileSystem(
 
             if (volumeInfo->VolumeLabelLength > 0)
             {
-                diskGroupId = PhAddListViewGroup(Context->ListViewHandle, i,
-                    PhaFormatString(L"Volume %wc: [%s]", diskEntry->DeviceLetter, PhaCreateStringEx(volumeInfo->VolumeLabel, volumeInfo->VolumeLabelLength)->Buffer)->Buffer);
+                diskGroupId = PhAddListViewGroup(Context->ListViewHandle, i, PhaFormatString(
+                    L"Volume %wc: [%s]",
+                    diskEntry->DeviceLetter,
+                    PhaCreateStringEx(volumeInfo->VolumeLabel, volumeInfo->VolumeLabelLength)->Buffer
+                    )->Buffer);
             }
             else
             {
-                diskGroupId = PhAddListViewGroup(Context->ListViewHandle, i,
-                    PhaFormatString(L"Volume %wc:", diskEntry->DeviceLetter)->Buffer);
+                diskGroupId = PhAddListViewGroup(Context->ListViewHandle, i, PhaFormatString(
+                    L"Volume %wc:",
+                    diskEntry->DeviceLetter
+                    )->Buffer);
             }
 
             DiskDriveAddListViewItemGroups(Context->ListViewHandle, diskGroupId);
@@ -311,11 +279,11 @@ VOID DiskDriveQueryFileSystem(
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_LFS_VERSION, 1,
                                 PhaFormatString(L"%lu.%lu", ntfsVolumeInfo.ExtendedVolumeData.LfsMajorVersion, ntfsVolumeInfo.ExtendedVolumeData.LfsMinorVersion)->Buffer);
                             //PhSetListViewSubItem(Context->ListViewHandle, lvItemIndex, 1,
-                            //    PhaFormatSize(ntfsVolumeInfo.ExtendedVolumeData.BytesPerPhysicalSector, -1)->Buffer);
+                            //    PhaFormatSize(ntfsVolumeInfo.ExtendedVolumeData.BytesPerPhysicalSector, ULONG_MAX)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_TOTAL_SIZE, 1,
-                                PhaFormatSize(ntfsVolumeInfo.VolumeData.NumberSectors.QuadPart * ntfsVolumeInfo.VolumeData.BytesPerSector, -1)->Buffer);
+                                PhaFormatSize(ntfsVolumeInfo.VolumeData.NumberSectors.QuadPart * ntfsVolumeInfo.VolumeData.BytesPerSector, ULONG_MAX)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_TOTAL_FREE, 1,
-                                PhaFormatString(L"%s (%.2f%%)", PhaFormatSize(ntfsVolumeInfo.VolumeData.FreeClusters.QuadPart * ntfsVolumeInfo.VolumeData.BytesPerCluster, -1)->Buffer, (FLOAT)(ntfsVolumeInfo.VolumeData.FreeClusters.QuadPart * 100) / ntfsVolumeInfo.VolumeData.TotalClusters.QuadPart)->Buffer);
+                                PhaFormatString(L"%s (%.2f%%)", PhaFormatSize(ntfsVolumeInfo.VolumeData.FreeClusters.QuadPart * ntfsVolumeInfo.VolumeData.BytesPerCluster, ULONG_MAX)->Buffer, (FLOAT)(ntfsVolumeInfo.VolumeData.FreeClusters.QuadPart * 100) / ntfsVolumeInfo.VolumeData.TotalClusters.QuadPart)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_TOTAL_SECTORS, 1,
                                 PhaFormatUInt64(ntfsVolumeInfo.VolumeData.NumberSectors.QuadPart, TRUE)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_TOTAL_CLUSTERS, 1,
@@ -335,13 +303,13 @@ VOID DiskDriveQueryFileSystem(
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_RECORDS, 1,
                                 PhaFormatUInt64(ntfsVolumeInfo.VolumeData.MftValidDataLength.QuadPart / ntfsVolumeInfo.VolumeData.BytesPerFileRecordSegment, TRUE)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_SIZE, 1,
-                                PhaFormatString(L"%s (%.2f%%)", PhaFormatSize(ntfsVolumeInfo.VolumeData.MftValidDataLength.QuadPart, -1)->Buffer, (FLOAT)(ntfsVolumeInfo.VolumeData.MftValidDataLength.QuadPart * 100 / ntfsVolumeInfo.VolumeData.BytesPerCluster) / ntfsVolumeInfo.VolumeData.TotalClusters.QuadPart)->Buffer);
+                                PhaFormatString(L"%s (%.2f%%)", PhaFormatSize(ntfsVolumeInfo.VolumeData.MftValidDataLength.QuadPart, ULONG_MAX)->Buffer, (FLOAT)(ntfsVolumeInfo.VolumeData.MftValidDataLength.QuadPart * 100 / ntfsVolumeInfo.VolumeData.BytesPerCluster) / ntfsVolumeInfo.VolumeData.TotalClusters.QuadPart)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_START, 1,
                                 PhaFormatString(L"%I64u", ntfsVolumeInfo.VolumeData.MftStartLcn.QuadPart)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_ZONE, 1,
                                 PhaFormatString(L"%I64u - %I64u", ntfsVolumeInfo.VolumeData.MftZoneStart.QuadPart, ntfsVolumeInfo.VolumeData.MftZoneEnd.QuadPart)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_ZONE_SIZE, 1,
-                                PhaFormatString(L"%s (%.2f%%)", PhaFormatSize((ntfsVolumeInfo.VolumeData.MftZoneEnd.QuadPart - ntfsVolumeInfo.VolumeData.MftZoneStart.QuadPart) * ntfsVolumeInfo.VolumeData.BytesPerCluster, -1)->Buffer, (FLOAT)(ntfsVolumeInfo.VolumeData.MftZoneEnd.QuadPart - ntfsVolumeInfo.VolumeData.MftZoneStart.QuadPart) * 100 / ntfsVolumeInfo.VolumeData.TotalClusters.QuadPart)->Buffer);
+                                PhaFormatString(L"%s (%.2f%%)", PhaFormatSize((ntfsVolumeInfo.VolumeData.MftZoneEnd.QuadPart - ntfsVolumeInfo.VolumeData.MftZoneStart.QuadPart) * ntfsVolumeInfo.VolumeData.BytesPerCluster, ULONG_MAX)->Buffer, (FLOAT)(ntfsVolumeInfo.VolumeData.MftZoneEnd.QuadPart - ntfsVolumeInfo.VolumeData.MftZoneStart.QuadPart) * 100 / ntfsVolumeInfo.VolumeData.TotalClusters.QuadPart)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_MIRROR_START, 1,
                                 PhaFormatString(L"%I64u", ntfsVolumeInfo.VolumeData.Mft2StartLcn.QuadPart)->Buffer);
                         }
@@ -361,9 +329,9 @@ VOID DiskDriveQueryFileSystem(
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_FS_VERSION, 1,
                                 PhaFormatString(L"%lu.%lu", refsVolumeInfo.MajorVersion, refsVolumeInfo.MinorVersion)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_TOTAL_SIZE, 1,
-                                PhaFormatSize(refsVolumeInfo.NumberSectors.QuadPart * refsVolumeInfo.BytesPerSector, -1)->Buffer);
+                                PhaFormatSize(refsVolumeInfo.NumberSectors.QuadPart * refsVolumeInfo.BytesPerSector, ULONG_MAX)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_TOTAL_FREE, 1,
-                                PhaFormatString(L"%s (%.2f%%)", PhaFormatSize(refsVolumeInfo.FreeClusters.QuadPart * refsVolumeInfo.BytesPerCluster, -1)->Buffer, (FLOAT)(refsVolumeInfo.FreeClusters.QuadPart * 100) / refsVolumeInfo.TotalClusters.QuadPart)->Buffer);
+                                PhaFormatString(L"%s (%.2f%%)", PhaFormatSize(refsVolumeInfo.FreeClusters.QuadPart * refsVolumeInfo.BytesPerCluster, ULONG_MAX)->Buffer, (FLOAT)(refsVolumeInfo.FreeClusters.QuadPart * 100) / refsVolumeInfo.TotalClusters.QuadPart)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_TOTAL_SECTORS, 1,
                                 PhaFormatUInt64(refsVolumeInfo.NumberSectors.QuadPart, TRUE)->Buffer);
                             PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_TOTAL_CLUSTERS, 1,
@@ -390,9 +358,9 @@ VOID DiskDriveQueryFileSystem(
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_DISK_WRITES, 1,
                         PhaFormatUInt64(buffer->FileSystemStatistics.UserDiskWrites, TRUE)->Buffer);
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_FILE_READ_BYTES, 1,
-                        PhaFormatSize(buffer->FileSystemStatistics.UserFileReadBytes, -1)->Buffer);
+                        PhaFormatSize(buffer->FileSystemStatistics.UserFileReadBytes, ULONG_MAX)->Buffer);
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_FILE_WRITE_BYTES, 1,
-                        PhaFormatSize(buffer->FileSystemStatistics.UserFileWriteBytes, -1)->Buffer);
+                        PhaFormatSize(buffer->FileSystemStatistics.UserFileWriteBytes, ULONG_MAX)->Buffer);
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_METADATA_READS, 1,
                         PhaFormatUInt64(buffer->FileSystemStatistics.MetaDataReads, TRUE)->Buffer);
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_METADATA_WRITES, 1,
@@ -402,9 +370,9 @@ VOID DiskDriveQueryFileSystem(
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_METADATA_DISK_WRITES, 1,
                         PhaFormatUInt64(buffer->FileSystemStatistics.MetaDataDiskWrites, TRUE)->Buffer);
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_METADATA_READ_BYTES, 1,
-                        PhaFormatSize(buffer->FileSystemStatistics.MetaDataReadBytes, -1)->Buffer);
+                        PhaFormatSize(buffer->FileSystemStatistics.MetaDataReadBytes, ULONG_MAX)->Buffer);
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_METADATA_WRITE_BYTES, 1,
-                        PhaFormatSize(buffer->FileSystemStatistics.MetaDataWriteBytes, -1)->Buffer);
+                        PhaFormatSize(buffer->FileSystemStatistics.MetaDataWriteBytes, ULONG_MAX)->Buffer);
 
                     // NTFS specific 
 
@@ -413,131 +381,12 @@ VOID DiskDriveQueryFileSystem(
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_WRITES, 1,
                         PhaFormatUInt64(buffer->NtfsStatistics.MftWrites, TRUE)->Buffer);
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_READ_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.MftReadBytes, -1)->Buffer);
+                        PhaFormatSize(buffer->NtfsStatistics.MftReadBytes, ULONG_MAX)->Buffer);
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_WRITE_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.MftWriteBytes, -1)->Buffer);
-                    //PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ROOT_INDEX_READS, 1,
-                    //    PhaFormatUInt64(buffer->NtfsStatistics.RootIndexReads, TRUE)->Buffer);
-                    //PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ROOT_INDEX_WRITES, 1,
-                    //    PhaFormatUInt64(buffer->NtfsStatistics.RootIndexWrites, TRUE)->Buffer);
-                    //PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ROOT_INDEX_READ_BYTES, 1,
-                    //    PhaFormatSize(buffer->NtfsStatistics.RootIndexReadBytes, -1)->Buffer);
-                    //PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ROOT_INDEX_WRITE_BYTES, 1,
-                    //    PhaFormatSize(buffer->NtfsStatistics.RootIndexWriteBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_READS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.BitmapReads, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.BitmapWrites, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_READ_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.BitmapReadBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITE_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.BitmapWriteBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_READS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapReads, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_WRITES, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapWrites, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_READ_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.MftBitmapReadBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_WRITE_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.MftBitmapWriteBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_USER_INDEX_READS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.UserIndexReads, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_USER_INDEX_WRITES, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.UserIndexWrites, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_USER_INDEX_READ_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.UserIndexReadBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_USER_INDEX_WRITE_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.UserIndexWriteBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_LOGFILE_READS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.LogFileReads, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_LOGFILE_WRITES, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.LogFileWrites, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_LOGFILE_READ_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.LogFileReadBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_LOGFILE_WRITE_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.LogFileWriteBytes, -1)->Buffer);
-                    /*PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_WRITE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftWritesUserLevel.Write, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_CREATE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftWritesUserLevel.Create, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_SETINFO, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftWritesUserLevel.SetInfo, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_FLUSH, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftWritesUserLevel.Flush, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_WRITES_FLUSH_LOGFILE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftWritesFlushForLogFileFull, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_WRITES_LAZY_WRITER, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftWritesLazyWriter, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_WRITES_USER_REQUEST, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftWritesUserRequest, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_WRITES, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Mft2Writes, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_WRITE_BYTES, 1,
-                        PhaFormatSize(buffer->NtfsStatistics.Mft2WriteBytes, -1)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_USER_LEVEL_WRITE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Mft2WritesUserLevel.Write, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_USER_LEVEL_CREATE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Mft2WritesUserLevel.Create, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_USER_LEVEL_SETINFO, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Mft2WritesUserLevel.SetInfo, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_USER_LEVEL_FLUSH, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Mft2WritesUserLevel.Flush, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_WRITES_FLUSH_LOGFILE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Mft2WritesFlushForLogFileFull, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_WRITES_LAZY_WRITER, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Mft2WritesLazyWriter, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT2_WRITES_USER_REQUEST, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Mft2WritesUserRequest, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_FLUSH_LOGFILE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.BitmapWritesFlushForLogFileFull, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_LAZY_WRITER, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.BitmapWritesLazyWriter, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_USER_REQUEST, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.BitmapWritesUserRequest, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_WRITE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.BitmapWritesUserLevel.Write, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_CREATE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.BitmapWritesUserLevel.Create, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES_SETINFO, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.BitmapWritesUserLevel.SetInfo, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_FLUSH_LOGFILE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapWritesFlushForLogFileFull, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_LAZY_WRITER, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapWritesLazyWriter, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_REQUEST, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapWritesUserRequest, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_WRITE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapWritesUserLevel.Write, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_CREATE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapWritesUserLevel.Create, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_SETINFO, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapWritesUserLevel.SetInfo, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_FLUSH, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.MftBitmapWritesUserLevel.Flush, TRUE)->Buffer);*/
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CALLS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.Calls, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CLUSTERS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.Clusters, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_HINTS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.Hints, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_RUNS_RETURNED, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.RunsReturned, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_HITS_HONORED, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.HintsHonored, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_HITS_CLUSTERS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.HintsClusters, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.Cache, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_CLUSTERS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.CacheClusters, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_MISS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.CacheMiss, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_MISS_CLUSTERS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.Allocate.CacheMissClusters, TRUE)->Buffer);
-                    PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_LOGFILE_EXCEPTIONS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.LogFileFullExceptions, TRUE)->Buffer);
+                        PhaFormatSize(buffer->NtfsStatistics.MftWriteBytes, ULONG_MAX)->Buffer);
+
                     PhSetListViewSubItem(Context->ListViewHandle, DISKDRIVE_DETAILS_INDEX_OTHER_EXCEPTIONS, 1,
-                        PhaFormatUInt64(buffer->NtfsStatistics.OtherExceptions, TRUE)->Buffer);
+                        PhaFormatUInt64(UInt32Add32To64(buffer->NtfsStatistics.LogFileFullExceptions, buffer->NtfsStatistics.OtherExceptions), TRUE)->Buffer);
 
                     // TODO: Additions for Windows 8.1 and Windows 10...
                 }
@@ -569,7 +418,7 @@ INT_PTR CALLBACK DiskDriveFileSystemDetailsDlgProc(
     _In_ LPARAM lParam
     )
 {
-    PDV_DISK_PAGE_CONTEXT context;
+    PDV_DISK_PAGE_CONTEXT context = NULL;
     LPPROPSHEETPAGE propSheetPage;
     PPV_PROPPAGECONTEXT propPageContext;
 
@@ -593,6 +442,7 @@ INT_PTR CALLBACK DiskDriveFileSystemDetailsDlgProc(
 
             PhRemoveWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT);
             PhFree(context);
+            context = NULL;
         }
     }
 
@@ -607,6 +457,8 @@ INT_PTR CALLBACK DiskDriveFileSystemDetailsDlgProc(
             context->ListViewHandle = GetDlgItem(hwndDlg, IDC_DETAILS_LIST);
 
             PhCenterWindow(GetParent(hwndDlg), NULL); // HACK (dmex)
+            SendMessage(GetParent(hwndDlg), WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(PHAPP_IDI_PROCESSHACKER)));
+            SendMessage(GetParent(hwndDlg), WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(PHAPP_IDI_PROCESSHACKER)));
 
             if (!!PhGetIntegerSetting(L"EnableThemeSupport")) // TODO: Required for compat (dmex)
                 PhInitializeWindowTheme(GetParent(hwndDlg), !!PhGetIntegerSetting(L"EnableThemeSupport"));
@@ -710,7 +562,7 @@ INT_PTR CALLBACK DiskDriveSmartDetailsDlgProc(
     _In_ LPARAM lParam
     )
 {
-    PDV_DISK_PAGE_CONTEXT context;
+    PDV_DISK_PAGE_CONTEXT context = NULL;
     LPPROPSHEETPAGE propSheetPage;
     PPV_PROPPAGECONTEXT propPageContext;
 
@@ -734,6 +586,7 @@ INT_PTR CALLBACK DiskDriveSmartDetailsDlgProc(
             PhSaveListViewColumnsToSetting(SETTING_NAME_SMART_COUNTERS_COLUMNS, context->ListViewHandle);
 
             PhFree(context);
+            context = NULL;
         }
     }
 
@@ -754,6 +607,8 @@ INT_PTR CALLBACK DiskDriveSmartDetailsDlgProc(
             PhAddListViewColumn(context->ListViewHandle, 2, 2, 2, LVCFMT_LEFT, 50, L"Best");
             PhAddListViewColumn(context->ListViewHandle, 3, 3, 3, LVCFMT_LEFT, 80, L"Raw");
             PhAddListViewColumn(context->ListViewHandle, 4, 4, 4, LVCFMT_LEFT, 80, L"Raw (Hex)");
+            //PhAddListViewColumn(context->ListViewHandle, 5, 5, 5, LVCFMT_LEFT, 80, L"Advisory");
+            //PhAddListViewColumn(context->ListViewHandle, 6, 6, 6, LVCFMT_LEFT, 80, L"Failure Imminent");
             PhSetExtendedListView(context->ListViewHandle);
             //ExtendedListView_SetItemColorFunction(context->ListViewHandle, PhpColorItemColorFunction);
             PhLoadListViewColumnsFromSetting(SETTING_NAME_SMART_COUNTERS_COLUMNS, context->ListViewHandle);

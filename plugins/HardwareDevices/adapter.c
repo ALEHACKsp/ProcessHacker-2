@@ -2,8 +2,8 @@
  * Process Hacker Plugins -
  *   Hardware Devices Plugin
  *
- * Copyright (C) 2015-2016 dmex
  * Copyright (C) 2016 wj32
+ * Copyright (C) 2015-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -63,9 +63,7 @@ VOID NetAdaptersUpdate(
         PDV_NETADAPTER_ENTRY entry;
         ULONG64 networkInOctets = 0;
         ULONG64 networkOutOctets = 0;
-        ULONG64 networkRcvSpeed = 0;
-        ULONG64 networkXmitSpeed = 0;
-        NDIS_MEDIA_CONNECT_STATE mediaState = MediaConnectStateUnknown;
+        ULONG64 linkSpeedValue = 0;
 
         entry = PhReferenceObjectSafe(NetworkAdaptersList->Items[i]);
 
@@ -74,9 +72,9 @@ VOID NetAdaptersUpdate(
 
         if (PhGetIntegerSetting(SETTING_NAME_ENABLE_NDIS))
         {
-            if (NT_SUCCESS(PhCreateFileWin32(
+            if (NT_SUCCESS(PhCreateFile(
                 &deviceHandle,
-                PhGetString(entry->AdapterId.InterfaceDevice),
+                PhGetString(entry->AdapterId.InterfacePath),
                 FILE_GENERIC_READ,
                 FILE_ATTRIBUTE_NORMAL,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -107,14 +105,8 @@ VOID NetAdaptersUpdate(
         if (deviceHandle)
         {
             NDIS_STATISTICS_INFO interfaceStats;
-            NDIS_LINK_STATE interfaceState;
 
             memset(&interfaceStats, 0, sizeof(NDIS_STATISTICS_INFO));
-
-            if (NT_SUCCESS(NetworkAdapterQueryLinkState(deviceHandle, &interfaceState)))
-            {
-                mediaState = interfaceState.MediaConnectState;
-            }
 
             if (NT_SUCCESS(NetworkAdapterQueryStatistics(deviceHandle, &interfaceStats)))
             {
@@ -134,13 +126,6 @@ VOID NetAdaptersUpdate(
                 networkOutOctets = NetworkAdapterQueryValue(deviceHandle, OID_GEN_BYTES_XMIT);
             }
 
-            networkRcvSpeed = networkInOctets - entry->LastInboundValue;
-            networkXmitSpeed = networkOutOctets - entry->LastOutboundValue;
-
-            // HACK: Pull the Adapter name from the current query.
-            if (!entry->AdapterName)
-                entry->AdapterName = NetworkAdapterQueryName(deviceHandle, entry->AdapterId.InterfaceGuid);
-
             entry->DevicePresent = TRUE;
 
             NtClose(deviceHandle);
@@ -149,21 +134,20 @@ VOID NetAdaptersUpdate(
         {
             MIB_IF_ROW2 interfaceRow;
 
-            if (QueryInterfaceRow(&entry->AdapterId, &interfaceRow))
+            if (NetworkAdapterQueryInterfaceRow(&entry->AdapterId, MibIfEntryNormal, &interfaceRow))
             {
                 networkInOctets = interfaceRow.InOctets;
                 networkOutOctets = interfaceRow.OutOctets;
-                mediaState = interfaceRow.MediaConnectState;
-                networkRcvSpeed = networkInOctets - entry->LastInboundValue;
-                networkXmitSpeed = networkOutOctets - entry->LastOutboundValue;
 
-                // HACK: Pull the Adapter name from the current query.
+                // HACK: Pull the Adapter name from the current query. (dmex)
                 if (!entry->AdapterName && PhCountStringZ(interfaceRow.Description) > 0)
-                {
                     entry->AdapterName = PhCreateString(interfaceRow.Description);
-                }
 
-                entry->DevicePresent = TRUE;
+                // HACK: Hide the device when it's not operational. (dmex)
+                if (interfaceRow.OperStatus == IfOperStatusUp)
+                    entry->DevicePresent = TRUE;
+                else
+                    entry->DevicePresent = FALSE;
             }
             else
             {
@@ -171,32 +155,29 @@ VOID NetAdaptersUpdate(
             }
         }
 
-        if (mediaState == MediaConnectStateUnknown)
-        {
-            // We don't want incorrect data when the adapter is disabled.
-            networkRcvSpeed = 0;
-            networkXmitSpeed = 0;
-        }
+        if (entry->NetworkReceiveRaw < networkInOctets)
+            entry->NetworkReceiveRaw = networkInOctets;
+        if (entry->NetworkSendRaw < networkOutOctets)
+            entry->NetworkSendRaw = networkOutOctets;
+
+        PhUpdateDelta(&entry->NetworkSendDelta, entry->NetworkSendRaw);
+        PhUpdateDelta(&entry->NetworkReceiveDelta, entry->NetworkReceiveRaw);
 
         if (!entry->HaveFirstSample)
         {
-            // The first sample must be zero.
-            networkRcvSpeed = 0;
-            networkXmitSpeed = 0;
+            entry->NetworkSendDelta.Delta = 0;
+            entry->NetworkReceiveDelta.Delta = 0;
             entry->HaveFirstSample = TRUE;
         }
 
         if (runCount != 0)
         {
-            PhAddItemCircularBuffer_ULONG64(&entry->InboundBuffer, networkRcvSpeed);
-            PhAddItemCircularBuffer_ULONG64(&entry->OutboundBuffer, networkXmitSpeed);
-        }
+            entry->CurrentNetworkSend = entry->NetworkSendDelta.Delta;
+            entry->CurrentNetworkReceive = entry->NetworkReceiveDelta.Delta;
 
-        //context->LinkSpeed = networkLinkSpeed;
-        entry->InboundValue = networkRcvSpeed;
-        entry->OutboundValue = networkXmitSpeed;
-        entry->LastInboundValue = networkInOctets;
-        entry->LastOutboundValue = networkOutOctets;
+            PhAddItemCircularBuffer_ULONG64(&entry->OutboundBuffer, entry->CurrentNetworkSend);
+            PhAddItemCircularBuffer_ULONG64(&entry->InboundBuffer, entry->CurrentNetworkReceive);
+        }
 
         PhDereferenceObjectDeferDelete(entry);
     }
@@ -204,6 +185,94 @@ VOID NetAdaptersUpdate(
     PhReleaseQueuedLockShared(&NetworkAdaptersListLock);
 
     runCount++;
+}
+
+VOID NetAdapterUpdateDeviceInfo(
+    _In_opt_ HANDLE DeviceHandle,
+    _In_ PDV_NETADAPTER_ENTRY AdapterEntry
+    )
+{
+    if (PhIsNullOrEmptyString(AdapterEntry->AdapterName))
+    {
+        HANDLE deviceHandle = NULL;
+
+        if (DeviceHandle)
+        {
+            deviceHandle = DeviceHandle;
+        }
+        else
+        {
+            if (PhGetIntegerSetting(SETTING_NAME_ENABLE_NDIS))
+            {
+                if (NT_SUCCESS(PhCreateFile(
+                    &deviceHandle,
+                    PhGetString(AdapterEntry->AdapterId.InterfacePath),
+                    FILE_GENERIC_READ,
+                    FILE_ATTRIBUTE_NORMAL,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    FILE_OPEN,
+                    FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT
+                    )))
+                {
+                    if (!AdapterEntry->CheckedDeviceSupport)
+                    {
+                        // Check the network adapter supports the OIDs we're going to be using.
+                        if (NetworkAdapterQuerySupported(deviceHandle))
+                        {
+                            AdapterEntry->DeviceSupported = TRUE;
+                        }
+
+                        AdapterEntry->CheckedDeviceSupport = TRUE;
+                    }
+
+                    if (!AdapterEntry->DeviceSupported)
+                    {
+                        // Device is faulty. Close the handle so we can fallback to GetIfEntry.
+                        NtClose(deviceHandle);
+                        deviceHandle = NULL;
+                    }
+                }
+            }
+        }
+
+        if (deviceHandle)
+        {
+            if (PhIsNullOrEmptyString(AdapterEntry->AdapterName))
+            {
+                AdapterEntry->AdapterName = NetworkAdapterQueryName(deviceHandle);
+            }
+
+            if (PhIsNullOrEmptyString(AdapterEntry->AdapterName))
+            {
+                AdapterEntry->AdapterName = NetworkAdapterQueryNameFromGuid(AdapterEntry->AdapterId.InterfaceGuid);
+            }
+
+            if (!DeviceHandle && deviceHandle)
+            {
+                NtClose(deviceHandle);
+            }
+        }
+        else
+        {
+            MIB_IF_ROW2 interfaceRow;
+
+            if (PhIsNullOrEmptyString(AdapterEntry->AdapterName))
+            {
+                AdapterEntry->AdapterName = NetworkAdapterQueryNameFromGuid(AdapterEntry->AdapterId.InterfaceGuid);
+            }
+
+            if (PhIsNullOrEmptyString(AdapterEntry->AdapterName))
+            {
+                if (NetworkAdapterQueryInterfaceRow(&AdapterEntry->AdapterId, MibIfEntryNormalWithoutStatistics, &interfaceRow))
+                {
+                    if (PhIsNullOrEmptyString(AdapterEntry->AdapterName) && PhCountStringZ(interfaceRow.Description) > 0)
+                    {
+                        AdapterEntry->AdapterName = PhCreateString(interfaceRow.Description);
+                    }
+                }
+            }
+        }
+    }
 }
 
 VOID InitializeNetAdapterId(
@@ -216,7 +285,7 @@ VOID InitializeNetAdapterId(
     Id->InterfaceIndex = InterfaceIndex;
     Id->InterfaceLuid = InterfaceLuid;
     PhSetReference(&Id->InterfaceGuid, InterfaceGuid);
-    Id->InterfaceDevice = PhConcatStrings2(L"\\\\.\\", InterfaceGuid->Buffer);
+    Id->InterfacePath = PhConcatStrings2(L"\\??\\", InterfaceGuid->Buffer);
 }
 
 VOID CopyNetAdapterId(
@@ -237,7 +306,7 @@ VOID DeleteNetAdapterId(
     )
 {
     PhClearReference(&Id->InterfaceGuid);
-    PhClearReference(&Id->InterfaceDevice);
+    PhClearReference(&Id->InterfacePath);
 }
 
 BOOLEAN EquivalentNetAdapterId(

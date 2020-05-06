@@ -25,6 +25,7 @@
 #include <mainwnd.h>
 #include <memsrch.h>
 #include <procprv.h>
+#include <phsettings.h>
 
 #define WM_PH_MEMORY_STATUS_UPDATE (WM_APP + 301)
 
@@ -488,6 +489,9 @@ ContinueLoop:
         baseAddress = PTR_ADD_OFFSET(baseAddress, basicInfo.RegionSize);
     }
 
+    if (displayBuffer)
+        PhFreePage(displayBuffer);
+
     if (buffer)
         PhFreePage(buffer);
 }
@@ -582,6 +586,8 @@ INT_PTR CALLBACK PhpMemoryStringDlgProc(
 
             Button_SetCheck(GetDlgItem(hwndDlg, IDC_DETECTUNICODE), BST_CHECKED);
             Button_SetCheck(GetDlgItem(hwndDlg, IDC_PRIVATE), BST_CHECKED);
+
+            PhInitializeWindowTheme(hwndDlg, PhEnableThemeSupport);
         }
         break;
     case WM_DESTROY:
@@ -639,16 +645,15 @@ INT_PTR CALLBACK PhpMemoryStringDlgProc(
     return FALSE;
 }
 
-static BOOL NTAPI PhpMemoryStringResultCallback(
+static VOID NTAPI PhpMemoryStringResultCallback(
     _In_ _Assume_refs_(1) PPH_MEMORY_RESULT Result,
     _In_opt_ PVOID Context
     )
 {
     PMEMORY_STRING_CONTEXT context = Context;
 
-    PhAddItemList(context->Results, Result);
-
-    return TRUE;
+    if (context)
+        PhAddItemList(context->Results, Result);
 }
 
 NTSTATUS PhpMemoryStringThreadStart(

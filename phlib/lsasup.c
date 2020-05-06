@@ -29,6 +29,7 @@
  */
 
 #include <ph.h>
+#include <apiimport.h>
 #include <lsasup.h>
 
 NTSTATUS PhOpenLsaPolicy(
@@ -109,6 +110,7 @@ LSA_HANDLE PhGetLookupPolicyHandle(
  * \param PrivilegeName A variable which receives a pointer to a string containing the privilege
  * name. You must free the string using PhDereferenceObject() when you no longer need it.
  */
+_Success_(return)
 BOOLEAN PhLookupPrivilegeName(
     _In_ PLUID PrivilegeValue,
     _Out_ PPH_STRING *PrivilegeName
@@ -140,6 +142,7 @@ BOOLEAN PhLookupPrivilegeName(
  * privilege's display name. You must free the string using PhDereferenceObject() when you no longer
  * need it.
  */
+_Success_(return)
 BOOLEAN PhLookupPrivilegeDisplayName(
     _In_ PPH_STRINGREF PrivilegeName,
     _Out_ PPH_STRING *PrivilegeDisplayName
@@ -175,6 +178,7 @@ BOOLEAN PhLookupPrivilegeDisplayName(
  * \param PrivilegeName The name of a privilege.
  * \param PrivilegeValue A variable which receives the LUID of the privilege.
  */
+_Success_(return)
 BOOLEAN PhLookupPrivilegeValue(
     _In_ PPH_STRINGREF PrivilegeName,
     _Out_ PLUID PrivilegeValue
@@ -267,6 +271,127 @@ NTSTATUS PhLookupSid(
         LsaFreeMemory(names);
 
     return status;
+}
+
+/**
+ * Converts an array of SIDs to a human-readable form.
+ *
+ * \param Count The size of the array.
+ * \param Sids An array of SIDs to query.
+ * \param FullNames A variable which receives a pointer to an array of strings in the following format:
+ * domain\\user. If not applicable to a particular SID, the function returns its SDDL representation.
+ * You must free each item using PhDereferenceObject(), and then free the array by calling PhFree().
+ */
+VOID PhLookupSids(
+    _In_ ULONG Count,
+    _In_ PSID *Sids,
+    _Out_ PPH_STRING **FullNames
+    )
+{
+    NTSTATUS status;
+    PLSA_REFERENCED_DOMAIN_LIST referencedDomains = NULL;
+    PLSA_TRANSLATED_NAME names = NULL;
+    PPH_STRING *translatedNames;
+
+    translatedNames = PhAllocateZero(sizeof(PPH_STRING) * Count);
+
+    status = LsaLookupSids(
+        PhGetLookupPolicyHandle(),
+        Count,
+        Sids,
+        &referencedDomains,
+        &names
+        );
+
+    if (status == STATUS_NONE_MAPPED)
+    {
+        // Even without mapping names it converts most of them to SDDL representation
+        status = STATUS_SOME_NOT_MAPPED;
+    }
+
+    if (NT_SUCCESS(status))
+    {
+        PPH_STRING userName;
+        PPH_STRING domainName;
+
+        for (ULONG i = 0; i < Count; i++)
+        {
+            userName = NULL;
+            domainName = NULL;
+
+            // Reference user if present
+            if (names[i].Name.Length > 0)
+            {
+                userName = PhCreateStringFromUnicodeString(&names[i].Name);
+            }
+
+            // Reference domain if present
+            if (names[i].DomainIndex >= 0)
+            {
+                PLSA_TRUST_INFORMATION trustInfo;
+
+                trustInfo = &referencedDomains->Domains[names[i].DomainIndex];
+
+                if (trustInfo->Name.Length > 0)
+                {
+                    domainName = PhCreateStringFromUnicodeString(&trustInfo->Name);
+                }
+            }
+
+            // Construct the name
+            if (names[i].Use != SidTypeInvalid && names[i].Use != SidTypeUnknown)
+            {
+                if (domainName && userName)
+                {
+                    translatedNames[i] = PhConcatStrings(
+                        3,
+                        domainName->Buffer,
+                        L"\\",
+                        userName->Buffer
+                        );
+                }
+                else if (domainName)
+                {
+                    translatedNames[i] = PhReferenceObject(domainName);
+                }
+                else if (userName)
+                {
+                    translatedNames[i] = PhReferenceObject(userName);
+                }
+            }
+            else
+            {
+                if (PhStartsWithString2(userName, L"S-1-", TRUE))
+                {
+                    translatedNames[i] = PhReferenceObject(userName);
+                }
+            }
+
+            if (userName)
+            {
+                PhDereferenceObject(userName);
+            }
+
+            if (domainName)
+            {
+                PhDereferenceObject(domainName);
+            }
+        }
+
+        LsaFreeMemory(referencedDomains);
+        LsaFreeMemory(names);
+    }
+
+    for (ULONG i = 0; i < Count; i++)
+    {
+        // Make sure everything is converted at least to SDDL
+        if (!translatedNames[i])
+        {
+            translatedNames[i] = PhSidToStringSid(Sids[i]);
+        }
+    }
+
+    *FullNames = translatedNames;
 }
 
 /**
@@ -407,7 +532,7 @@ PPH_STRING PhGetSidFullName(
 
             if (domainNameBuffer && domainNameLength != 0)
             {
-                fullName = PhCreateStringEx(NULL, domainNameLength + sizeof(WCHAR) + names[0].Name.Length);
+                fullName = PhCreateStringEx(NULL, domainNameLength + sizeof(UNICODE_NULL) + names[0].Name.Length);
                 memcpy(&fullName->Buffer[0], domainNameBuffer, domainNameLength);
                 fullName->Buffer[domainNameLength / sizeof(WCHAR)] = OBJ_NAME_PATH_SEPARATOR;
                 memcpy(&fullName->Buffer[domainNameLength / sizeof(WCHAR) + 1], names[0].Name.Buffer, names[0].Name.Length);
@@ -493,6 +618,38 @@ PPH_STRING PhGetTokenUserString(
     return tokenUserString;
 }
 
+NTSTATUS PhGetAccountPrivileges(
+    _In_ PSID AccountSid,
+    _Out_ PTOKEN_PRIVILEGES *Privileges
+    )
+{
+    NTSTATUS status;
+    LSA_HANDLE accountHandle;
+    PPRIVILEGE_SET accountPrivileges;
+    PTOKEN_PRIVILEGES privileges;
+
+    status = LsaOpenAccount(PhGetLookupPolicyHandle(), AccountSid, ACCOUNT_VIEW, &accountHandle);
+
+    if (!NT_SUCCESS(status))
+        return status;
+
+    status = LsaEnumeratePrivilegesOfAccount(accountHandle, &accountPrivileges);
+    LsaClose(accountHandle);
+
+    if (!NT_SUCCESS(status))
+        return status;
+
+    privileges = PhAllocate(FIELD_OFFSET(TOKEN_PRIVILEGES, Privileges) + sizeof(LUID_AND_ATTRIBUTES) * accountPrivileges->PrivilegeCount);
+    privileges->PrivilegeCount = accountPrivileges->PrivilegeCount;
+    memcpy(privileges->Privileges, accountPrivileges->Privilege, sizeof(LUID_AND_ATTRIBUTES) * accountPrivileges->PrivilegeCount);
+
+    LsaFreeMemory(accountPrivileges);
+
+    *Privileges = privileges;
+
+    return status;
+}
+
 typedef struct _PH_CAPABILITY_ENTRY
 {
     PPH_STRING Name;
@@ -504,17 +661,12 @@ VOID PhInitializeCapabilitySidCache(
     _Inout_ PPH_ARRAY CapabilitySidArrayList
     )
 {
-    NTSTATUS (NTAPI *RtlDeriveCapabilitySidsFromName_I)(
-        _Inout_ PUNICODE_STRING UnicodeString,
-        _Out_ PSID CapabilityGroupSid,
-        _Out_ PSID CapabilitySid
-        );
     PPH_STRING applicationDirectory;
     PPH_STRING capabilityListString = NULL;
     PH_STRINGREF namePart;
     PH_STRINGREF remainingPart;
 
-    if (!(RtlDeriveCapabilitySidsFromName_I = PhGetDllProcedureAddress(L"ntdll.dll", "RtlDeriveCapabilitySidsFromName", 0)))
+    if (!RtlDeriveCapabilitySidsFromName_Import())
         return;
 
     if (applicationDirectory = PhGetApplicationDirectory())
@@ -524,7 +676,7 @@ VOID PhInitializeCapabilitySidCache(
         capabilityListFileName = PhConcatStringRefZ(&applicationDirectory->sr, L"capslist.txt");
         PhDereferenceObject(applicationDirectory);
 
-        capabilityListString = PhFileReadAllText(capabilityListFileName->Buffer);
+        capabilityListString = PhFileReadAllText(capabilityListFileName->Buffer, TRUE);
         PhDereferenceObject(capabilityListFileName);      
     }
 
@@ -536,7 +688,7 @@ VOID PhInitializeCapabilitySidCache(
 
     while (remainingPart.Length != 0)
     {
-        PhSplitStringRefAtChar(&remainingPart, '\n', &namePart, &remainingPart);
+        PhSplitStringRefAtChar(&remainingPart, L'\n', &namePart, &remainingPart);
 
         if (namePart.Length != 0)
         {
@@ -552,7 +704,7 @@ VOID PhInitializeCapabilitySidCache(
             if (!PhStringRefToUnicodeString(&namePart, &capabilityNameUs))
                 continue;
 
-            if (NT_SUCCESS(RtlDeriveCapabilitySidsFromName_I(
+            if (NT_SUCCESS(RtlDeriveCapabilitySidsFromName_Import()(
                 &capabilityNameUs,
                 capabilityGroupSid,
                 capabilitySid
@@ -716,7 +868,7 @@ BOOLEAN NTAPI PhpDeviceAccessEnumerateKeyCallback(
         entry.KeyName = PhCreateString2(&keyName);
         entry.Context = Context;
 
-        PhEnumerateKey(keyHandle, PhpDeviceAccessSubKeyEnumerateKeyCallback, &entry);
+        PhEnumerateKey(keyHandle, KeyBasicInformation, PhpDeviceAccessSubKeyEnumerateKeyCallback, &entry);
 
         PhDereferenceObject(entry.KeyName);
         NtClose(keyHandle);
@@ -743,7 +895,7 @@ VOID PhInitializeCapabilityGuidCache(
         0
         )))
     {
-        PhEnumerateKey(keyHandle, PhpAccessManagerEnumerateKeyCallback, CapabilityGuidArrayList);
+        PhEnumerateKey(keyHandle, KeyBasicInformation, PhpAccessManagerEnumerateKeyCallback, CapabilityGuidArrayList);
         NtClose(keyHandle);
     }
 
@@ -755,7 +907,7 @@ VOID PhInitializeCapabilityGuidCache(
         0
         )))
     {
-        PhEnumerateKey(keyHandle, PhpDeviceAccessEnumerateKeyCallback, CapabilityGuidArrayList);
+        PhEnumerateKey(keyHandle, KeyBasicInformation, PhpDeviceAccessEnumerateKeyCallback, CapabilityGuidArrayList);
         NtClose(keyHandle);
     }
 }

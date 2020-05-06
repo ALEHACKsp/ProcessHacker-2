@@ -8,10 +8,6 @@ extern BOOLEAN PhMainWndExiting;
 #define WM_PH_ACTIVATE (WM_APP + 99)
 #define PH_ACTIVATE_REPLY 0x1119
 
-#define WM_PH_PROCESSES_UPDATED (WM_APP + 100)
-#define WM_PH_SERVICES_UPDATED (WM_APP + 101)
-#define WM_PH_NETWORK_ITEMS_UPDATED (WM_APP + 102)
-
 // begin_phapppub
 #define WM_PH_SHOW_PROCESS_PROPERTIES (WM_APP + 120)
 #define WM_PH_DESTROY (WM_APP + 121)
@@ -31,9 +27,9 @@ extern BOOLEAN PhMainWndExiting;
 #define WM_PH_SELECT_PROCESS_NODE (WM_APP + 133)
 #define WM_PH_SELECT_SERVICE_ITEM (WM_APP + 134)
 #define WM_PH_SELECT_NETWORK_ITEM (WM_APP + 135)
-// end_phapppub
 #define WM_PH_UPDATE_FONT (WM_APP + 136)
 #define WM_PH_GET_FONT (WM_APP + 137)
+// end_phapppub
 // begin_phapppub
 #define WM_PH_INVOKE (WM_APP + 138)
 // WM_PH_DEPRECATED (WM_APP + 139)

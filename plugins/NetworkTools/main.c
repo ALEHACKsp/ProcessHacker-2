@@ -60,6 +60,9 @@ VOID NTAPI ShowOptionsCallback(
 {
     PPH_PLUGIN_OPTIONS_POINTERS optionsEntry = (PPH_PLUGIN_OPTIONS_POINTERS)Parameter;
 
+    if (!optionsEntry)
+        return;
+
     optionsEntry->CreateSection(
         L"NetworkTools",
         PluginInstance->DllBase,
@@ -69,6 +72,7 @@ VOID NTAPI ShowOptionsCallback(
         );
 }
 
+_Success_(return)
 static BOOLEAN ParseNetworkAddress(
     _In_ PWSTR AddressString,
     _Out_ PPH_IP_ENDPOINT RemoteEndpoint  
@@ -163,7 +167,12 @@ VOID NTAPI MenuItemCallback(
     )
 {
     PPH_PLUGIN_MENU_ITEM menuItem = (PPH_PLUGIN_MENU_ITEM)Parameter;
-    PPH_NETWORK_ITEM networkItem = (PPH_NETWORK_ITEM)menuItem->Context;
+    PPH_NETWORK_ITEM networkItem;
+
+    if (!menuItem)
+        return;
+
+    networkItem = (PPH_NETWORK_ITEM)menuItem->Context;
 
     switch (menuItem->Id)
     {
@@ -268,6 +277,8 @@ VOID NTAPI MainMenuInitializingCallback(
     PPH_PLUGIN_MENU_INFORMATION menuInfo = Parameter;
     PPH_EMENU_ITEM networkToolsMenu;
 
+    if (!menuInfo)
+        return;
     if (menuInfo->u.MainMenu.SubMenuIndex != PH_MENU_ITEM_LOCATION_TOOLS)
         return;
   
@@ -290,6 +301,9 @@ VOID NTAPI NetworkMenuInitializingCallback(
     PPH_EMENU_ITEM whoisMenu;
     PPH_EMENU_ITEM traceMenu;
     PPH_EMENU_ITEM pingMenu;
+
+    if (!menuInfo)
+        return;
 
     if (menuInfo->u.Network.NumberOfNetworkItems == 1)
         networkItem = menuInfo->u.Network.NetworkItems[0];
@@ -389,7 +403,11 @@ VOID NTAPI NetworkTreeNewInitializingCallback(
     PPH_PLUGIN_TREENEW_INFORMATION info = Parameter;
     PH_TREENEW_COLUMN column;
 
-    *(HWND*)Context = info->TreeNewHandle;
+    if (!info)
+        return;
+
+    if (Context)
+        *(HWND*)Context = info->TreeNewHandle;
 
     memset(&column, 0, sizeof(PH_TREENEW_COLUMN));
     column.Text = L"Country";
@@ -509,10 +527,10 @@ FORCEINLINE VOID PhpNetworkItemToRow6(
     )
 {
     Row->State = NetworkItem->State;
-    memcpy(Row->LocalAddr.u.Byte, NetworkItem->LocalEndpoint.Address.Ipv6, 16);
+    memcpy_s(Row->LocalAddr.s6_addr, sizeof(Row->LocalAddr.s6_addr), NetworkItem->LocalEndpoint.Address.Ipv6, sizeof(NetworkItem->LocalEndpoint.Address.Ipv6));
     Row->dwLocalScopeId = NetworkItem->LocalScopeId;
     Row->dwLocalPort = _byteswap_ushort((USHORT)NetworkItem->LocalEndpoint.Port);
-    memcpy(Row->RemoteAddr.u.Byte, NetworkItem->RemoteEndpoint.Address.Ipv6, 16);
+    memcpy_s(Row->RemoteAddr.s6_addr, sizeof(Row->RemoteAddr.s6_addr), NetworkItem->RemoteEndpoint.Address.Ipv6, sizeof(NetworkItem->RemoteEndpoint.Address.Ipv6));
     Row->dwRemoteScopeId = NetworkItem->RemoteScopeId;
     Row->dwRemotePort = _byteswap_ushort((USHORT)NetworkItem->RemoteEndpoint.Port);
 }
@@ -672,6 +690,9 @@ VOID NTAPI TreeNewMessageCallback(
 {
     PPH_PLUGIN_TREENEW_MESSAGE message = Parameter;
 
+    if (!message)
+        return;
+
     switch (message->Message)
     {
     case TreeNewGetCellText:
@@ -708,6 +729,8 @@ VOID NTAPI TreeNewMessageCallback(
                     getCellText->Text = PhGetStringRef(extension->LatencyText);
                     break;
                 }
+
+                getCellText->Flags = TN_CACHE;
             }
         }
         break;
@@ -779,7 +802,7 @@ VOID ProcessesUpdatedCallback(
     if (!NetworkExtensionEnabled)
         return;
 
-    if (ProcessesUpdatedCount < 2)
+    if (ProcessesUpdatedCount != 3)
     {
         ProcessesUpdatedCount++;
         return;
@@ -915,7 +938,7 @@ LOGICAL DllMain(
                 { ScalableIntegerPairSettingType, SETTING_NAME_TRACERT_WINDOW_SIZE, L"@96|850,490" },
                 { StringSettingType, SETTING_NAME_TRACERT_TREE_LIST_COLUMNS, L"" },
                 { IntegerPairSettingType, SETTING_NAME_TRACERT_TREE_LIST_SORT, L"0,1" },
-                { IntegerSettingType, SETTING_NAME_TRACERT_MAX_HOPS, L"30" },
+                { IntegerSettingType, SETTING_NAME_TRACERT_MAX_HOPS, L"14" },
                 { IntegerPairSettingType, SETTING_NAME_WHOIS_WINDOW_POSITION, L"0,0" },
                 { ScalableIntegerPairSettingType, SETTING_NAME_WHOIS_WINDOW_SIZE, L"@96|600,365" },
                 { StringSettingType, SETTING_NAME_DB_LOCATION, L"%APPDATA%\\Process Hacker\\GeoLite2-Country.mmdb" },

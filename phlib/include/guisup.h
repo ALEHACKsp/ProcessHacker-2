@@ -24,9 +24,9 @@ extern "C" {
 typedef struct _NMRUNFILEDLGW
 {
     NMHDR hdr;
-    LPCWSTR lpszFile;
-    LPCWSTR lpszDirectory;
-    UINT nShow;
+    PWSTR lpszFile;
+    PWSTR lpszDirectory;
+    UINT ShowCmd;
 } NMRUNFILEDLGW, *LPNMRUNFILEDLGW, *PNMRUNFILEDLGW;
 
 typedef NMRUNFILEDLGW NMRUNFILEDLG;
@@ -161,7 +161,9 @@ INT PhAddListViewColumn(
     );
 
 PHLIBAPI
-INT PhAddListViewItem(
+INT
+NTAPI
+PhAddListViewItem(
     _In_ HWND ListViewHandle,
     _In_ INT Index,
     _In_ PWSTR Text,
@@ -169,31 +171,50 @@ INT PhAddListViewItem(
     );
 
 PHLIBAPI
-INT PhFindListViewItemByFlags(
+INT
+NTAPI
+PhFindListViewItemByFlags(
     _In_ HWND ListViewHandle,
     _In_ INT StartIndex,
     _In_ ULONG Flags
     );
 
 PHLIBAPI
-INT PhFindListViewItemByParam(
+INT
+NTAPI
+PhFindListViewItemByParam(
     _In_ HWND ListViewHandle,
     _In_ INT StartIndex,
     _In_opt_ PVOID Param
     );
 
+_Success_(return)
 PHLIBAPI
-LOGICAL PhGetListViewItemImageIndex(
+BOOLEAN
+NTAPI
+PhGetListViewItemImageIndex(
     _In_ HWND ListViewHandle,
     _In_ INT Index,
     _Out_ PINT ImageIndex
     );
 
+_Success_(return)
 PHLIBAPI
-LOGICAL PhGetListViewItemParam(
+BOOLEAN
+NTAPI
+PhGetListViewItemParam(
     _In_ HWND ListViewHandle,
     _In_ INT Index,
     _Out_ PVOID *Param
+    );
+
+PHLIBAPI
+BOOLEAN
+NTAPI
+PhSetListViewItemParam(
+    _In_ HWND ListViewHandle,
+    _In_ INT Index,
+    _In_ PVOID Param
     );
 
 PHLIBAPI
@@ -489,6 +510,16 @@ VOID
 PhRemoveWindowContext(
     _In_ HWND WindowHandle, 
     _In_ ULONG PropertyHash
+    );
+
+typedef BOOL (CALLBACK* PH_ENUM_CALLBACK)(
+    _In_ HWND WindowHandle,
+    _In_opt_ PVOID Context
+    );
+
+VOID PhEnumWindows(
+    _In_ PH_ENUM_CALLBACK Callback,
+    _In_opt_ PVOID Context
     );
 
 typedef BOOLEAN (CALLBACK *PH_CHILD_ENUM_CALLBACK)(
@@ -884,15 +915,10 @@ PhWindowNotifyTopMostEvent(
     );
 
 PHLIBAPI
-BOOLEAN
+HANDLE
 NTAPI
-PhShowRunFileDialog(
-    _In_ HWND WindowHandle,
-    _In_opt_ HICON WindowIcon,
-    _In_opt_ PWSTR WorkingDirectory,
-    _In_opt_ PWSTR WindowTitle,
-    _In_opt_ PWSTR WindowDescription,
-    _In_ ULONG Flags
+PhGetGlobalTimerQueue(
+    VOID
     );
 
 // theme support (theme.c)
@@ -912,6 +938,13 @@ PhInitializeWindowTheme(
 PHLIBAPI
 VOID
 NTAPI
+PhInitializeWindowThemeEx(
+    _In_ HWND WindowHandle
+    );
+
+PHLIBAPI
+VOID
+NTAPI
 PhReInitializeWindowTheme(
     _In_ HWND WindowHandle
     );
@@ -921,6 +954,13 @@ VOID
 NTAPI
 PhInitializeThemeWindowFrame(
     _In_ HWND WindowHandle
+    );
+
+PHLIBAPI
+VOID
+NTAPI
+PhInitializeThemeWindowHeader(
+    _In_ HWND HeaderWindow
     );
 
 PHLIBAPI
@@ -934,6 +974,7 @@ PHLIBAPI
 BOOLEAN
 NTAPI
 PhThemeWindowMeasureItem(
+    _In_ HWND WindowHandle,
     _In_ PMEASUREITEMSTRUCT DrawInfo
     );
 
@@ -942,6 +983,20 @@ VOID
 NTAPI
 PhInitializeWindowThemeStatusBar(
     _In_ HWND StatusBarHandle
+    );
+
+PHLIBAPI
+LRESULT
+CALLBACK
+PhThemeWindowDrawRebar(
+    _In_ LPNMCUSTOMDRAW DrawInfo
+    );
+
+PHLIBAPI
+LRESULT
+CALLBACK
+PhThemeWindowDrawToolbar(
+    _In_ LPNMTBCUSTOMDRAW DrawInfo
     );
 
 FORCEINLINE

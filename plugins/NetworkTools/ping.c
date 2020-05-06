@@ -241,6 +241,9 @@ VOID NTAPI NetworkPingUpdateHandler(
 {
     PNETWORK_PING_CONTEXT context = (PNETWORK_PING_CONTEXT)Context;
 
+    if (!context)
+        return;
+
     // Queue up the next ping request
     PhQueueItemWorkQueue(&context->PingWorkQueue, NetworkPingThreadStart, (PVOID)context);
 }
@@ -335,8 +338,8 @@ INT_PTR CALLBACK NetworkPingWndProc(
             else
                 PhCenterWindow(hwndDlg, PhMainWndHandle);
 
-            SetWindowText(hwndDlg, PhaFormatString(L"Ping %s", context->IpAddressString)->Buffer);
-            SetWindowText(context->StatusHandle, PhaFormatString(L"Pinging %s with %lu bytes of data...",
+            PhSetWindowText(hwndDlg, PhaFormatString(L"Ping %s", context->IpAddressString)->Buffer);
+            PhSetWindowText(context->StatusHandle, PhaFormatString(L"Pinging %s with %lu bytes of data...",
                 context->IpAddressString,
                 PhGetIntegerSetting(SETTING_NAME_PING_SIZE))->Buffer
                 );
@@ -379,7 +382,7 @@ INT_PTR CALLBACK NetworkPingWndProc(
                 DestroyWindow(context->PingGraphHandle);
 
             if (context->FontHandle)
-                DeleteObject(context->FontHandle);
+                DeleteFont(context->FontHandle);
 
             PhDeleteWorkQueue(&context->PingWorkQueue);
             PhDeleteGraphState(&context->PingGraphState);
@@ -444,13 +447,13 @@ INT_PTR CALLBACK NetworkPingWndProc(
                     {
                         if (PhGetIntegerSetting(L"GraphShowText"))
                         {
-                            HDC hdc = Graph_GetBufferedContext(context->PingGraphHandle);
+                            HDC hdc;
 
                             PhMoveReference(&context->PingGraphState.Text,
                                 PhFormatString(L"%lu ms", context->CurrentPingMs)
                                 );
 
-                            SelectObject(hdc, PhApplicationFont);
+                            hdc = Graph_GetBufferedContext(context->PingGraphHandle);
                             PhSetGraphText(hdc, drawInfo, &context->PingGraphState.Text->sr,
                                 &NormalGraphTextMargin, &NormalGraphTextPadding, PH_ALIGN_TOP | PH_ALIGN_LEFT);
                         }

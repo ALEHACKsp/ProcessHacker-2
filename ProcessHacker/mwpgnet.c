@@ -94,7 +94,10 @@ BOOLEAN PhMwpNetworkPageCallback(
         break;
     case MainTabPageCreateWindow:
         {
-            *(HWND *)Parameter1 = PhMwpNetworkTreeNewHandle;
+            if (Parameter1)
+            {
+                *(HWND*)Parameter1 = PhMwpNetworkTreeNewHandle;
+            }
         }
         return TRUE;
     case MainTabPageSelected:
@@ -122,9 +125,15 @@ BOOLEAN PhMwpNetworkPageCallback(
     case MainTabPageInitializeSectionMenuItems:
         {
             PPH_MAIN_TAB_PAGE_MENU_INFORMATION menuInfo = Parameter1;
-            PPH_EMENU menu = menuInfo->Menu;
-            ULONG startIndex = menuInfo->StartIndex;
+            PPH_EMENU menu;
+            ULONG startIndex;
             PPH_EMENU_ITEM menuItem;
+
+            if (!menuInfo)
+                break;
+
+            menu = menuInfo->Menu;
+            startIndex = menuInfo->StartIndex;
 
             PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_VIEW_HIDEWAITINGCONNECTIONS, L"&Hide waiting connections", NULL, NULL), startIndex);
 
@@ -148,6 +157,9 @@ BOOLEAN PhMwpNetworkPageCallback(
         {
             PPH_MAIN_TAB_PAGE_EXPORT_CONTENT exportContent = Parameter1;
 
+            if (!exportContent)
+                break;
+
             PhWriteNetworkList(exportContent->FileStream, exportContent->Mode);
         }
         return TRUE;
@@ -155,7 +167,7 @@ BOOLEAN PhMwpNetworkPageCallback(
         {
             HFONT font = (HFONT)Parameter1;
 
-            SendMessage(PhMwpNetworkTreeNewHandle, WM_SETFONT, (WPARAM)font, TRUE);
+            SetWindowFont(PhMwpNetworkTreeNewHandle, font, TRUE);
         }
         break;
     case MainTabPageUpdateAutomaticallyChanged:
@@ -209,8 +221,9 @@ BOOLEAN PhMwpNetworkTreeFilter(
 {
     PPH_NETWORK_NODE networkNode = (PPH_NETWORK_NODE)Node;
 
-    // Waiting connections don't have a ProcessId. (dmex)
     if (!networkNode->NetworkItem->ProcessId)
+        return FALSE;
+    if (networkNode->NetworkItem->State == MIB_TCP_STATE_CLOSE_WAIT)
         return FALSE;
 
     return TRUE;
@@ -286,9 +299,13 @@ VOID PhShowNetworkContextMenu(
         PPH_EMENU_ITEM item;
 
         menu = PhCreateEMenu();
-        PhLoadResourceEMenuItem(menu, PhInstanceHandle, MAKEINTRESOURCE(IDR_NETWORK), 0);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_NETWORK_GOTOPROCESS, L"&Go to process\bEnter", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_NETWORK_GOTOSERVICE, L"Go to service", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_NETWORK_CLOSE, L"C&lose", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_NETWORK_COPY, L"&Copy\bCtrl+C", NULL, NULL), ULONG_MAX);
         PhSetFlagsEMenuItem(menu, ID_NETWORK_GOTOPROCESS, PH_EMENU_DEFAULT, PH_EMENU_DEFAULT);
-
         PhMwpInitializeNetworkMenu(menu, networkItems, numberOfNetworkItems);
         PhInsertCopyCellEMenuItem(menu, ID_NETWORK_COPY, PhMwpNetworkTreeNewHandle, ContextMenu->Column);
 
@@ -336,6 +353,9 @@ VOID NTAPI PhMwpNetworkItemAddedHandler(
 {
     PPH_NETWORK_ITEM networkItem = (PPH_NETWORK_ITEM)Parameter;
 
+    if (!networkItem)
+        return;
+
     PhReferenceObject(networkItem);
     PhPushProviderEventQueue(&PhMwpNetworkEventQueue, ProviderAddedEvent, Parameter, PhGetRunIdProvider(&PhMwpNetworkProviderRegistration));
 }
@@ -365,7 +385,7 @@ VOID NTAPI PhMwpNetworkItemsUpdatedHandler(
     _In_opt_ PVOID Context
     )
 {
-    PostMessage(PhMainWndHandle, WM_PH_NETWORK_ITEMS_UPDATED, PhGetRunIdProvider(&PhMwpNetworkProviderRegistration), 0);
+    ProcessHacker_Invoke(PhMainWndHandle, PhMwpOnNetworkItemsUpdated, PhGetRunIdProvider(&PhMwpNetworkProviderRegistration));
 }
 
 VOID PhMwpOnNetworkItemsUpdated(

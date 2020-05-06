@@ -47,45 +47,6 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 //
-// Version
-//
-
-VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,0,0,0
- PRODUCTVERSION 2,0,0,0
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0x1L
-#else
- FILEFLAGS 0x0L
-#endif
- FILEOS 0x40004L
- FILETYPE 0x2L
- FILESUBTYPE 0x0L
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "0c0904b0"
-        BEGIN
-            VALUE "CompanyName", "dmex"
-            VALUE "FileDescription", "Update checker plugin for Process Hacker"
-            VALUE "FileVersion", "2.0"
-            VALUE "InternalName", "ProcessHacker.UpdateChecker"
-            VALUE "LegalCopyright", "Licensed under the GNU GPL, v3."
-            VALUE "OriginalFilename", "Updater.dll"
-            VALUE "ProductName", "Update checker plugin for Process Hacker"
-            VALUE "ProductVersion", "2.0"
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0xc09, 1200
-    END
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
 // Dialog
 //
 
@@ -103,8 +64,8 @@ STYLE DS_SETFONT | DS_FIXEDSYS | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS
 CAPTION "Changelog"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    EDITTEXT        IDC_TEXT,1,1,307,154,ES_MULTILINE | WS_VSCROLL
     DEFPUSHBUTTON   "OK",IDCANCEL,258,159,50,14
+    CONTROL         "",IDC_COMMITS,"SysListView32",LVS_REPORT | LVS_ALIGNLEFT | WS_BORDER | WS_TABSTOP,1,1,307,156
 END
 
 
@@ -133,7 +94,6 @@ BEGIN
     END
 END
 #endif    // APSTUDIO_INVOKED
-
 
 #endif    // English (Australia) resources
 /////////////////////////////////////////////////////////////////////////////

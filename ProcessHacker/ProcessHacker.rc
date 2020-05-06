@@ -69,396 +69,6 @@ IDI_MAGNIFIER           ICON                    "resources\\magnifier.ico"
 
 /////////////////////////////////////////////////////////////////////////////
 //
-// Menu
-//
-
-IDR_MAINWND MENU
-BEGIN
-    POPUP "&Hacker"
-    BEGIN
-        MENUITEM "&Run...\aCtrl+R",             ID_HACKER_RUN
-        MENUITEM "Run as ad&ministrator...",    ID_HACKER_RUNASADMINISTRATOR
-        MENUITEM "Run as &limited user...",     ID_HACKER_RUNASLIMITEDUSER
-        MENUITEM "Run &as...\aCtrl+Shift+R",    ID_HACKER_RUNAS
-        MENUITEM "Show &details for all processes", ID_HACKER_SHOWDETAILSFORALLPROCESSES
-        MENUITEM SEPARATOR
-        MENUITEM "&Save...\aCtrl+S",            ID_HACKER_SAVE
-        MENUITEM "&Find handles or DLLs...\aCtrl+F", ID_HACKER_FINDHANDLESORDLLS
-        MENUITEM "&Options...",                 ID_HACKER_OPTIONS
-        MENUITEM "&Plugins...",                 ID_HACKER_PLUGINS
-        MENUITEM SEPARATOR
-        POPUP "&Computer"
-        BEGIN
-            MENUITEM "&Lock",                       ID_COMPUTER_LOCK
-            MENUITEM "Log o&ff",                    ID_COMPUTER_LOGOFF
-            MENUITEM SEPARATOR
-            MENUITEM "&Sleep",                      ID_COMPUTER_SLEEP
-            MENUITEM "&Hibernate",                  ID_COMPUTER_HIBERNATE
-            MENUITEM SEPARATOR
-            MENUITEM "R&estart",                    ID_COMPUTER_RESTART
-            MENUITEM "Restart to boot options",     ID_COMPUTER_RESTARTBOOTOPTIONS
-            MENUITEM "Shu&t down",                  ID_COMPUTER_SHUTDOWN
-            MENUITEM "H&ybrid shut down",           ID_COMPUTER_SHUTDOWNHYBRID
-        END
-        MENUITEM "E&xit",                       ID_HACKER_EXIT
-    END
-    POPUP "&View"
-    BEGIN
-        MENUITEM "System &information\aCtrl+I", ID_VIEW_SYSTEMINFORMATION
-        MENUITEM "&Tray icons",                 ID_VIEW_TRAYICONS
-        MENUITEM SEPARATOR
-        MENUITEM "<section placeholder>",       ID_VIEW_SECTIONPLACEHOLDER
-        MENUITEM SEPARATOR
-        MENUITEM "&Always on top",              ID_VIEW_ALWAYSONTOP
-        POPUP "&Opacity"
-        BEGIN
-            MENUITEM "&10%",                        ID_OPACITY_10
-            MENUITEM "&20%",                        ID_OPACITY_20
-            MENUITEM "&30%",                        ID_OPACITY_30
-            MENUITEM "&40%",                        ID_OPACITY_40
-            MENUITEM "&50%",                        ID_OPACITY_50
-            MENUITEM "&60%",                        ID_OPACITY_60
-            MENUITEM "&70%",                        ID_OPACITY_70
-            MENUITEM "&80%",                        ID_OPACITY_80
-            MENUITEM "&90%",                        ID_OPACITY_90
-            MENUITEM "&Opaque",                     ID_OPACITY_OPAQUE
-        END
-        MENUITEM SEPARATOR
-        MENUITEM "&Refresh\aF5",                ID_VIEW_REFRESH
-        POPUP "Refresh i&nterval"
-        BEGIN
-            MENUITEM "&Fast (0.5s)",                ID_UPDATEINTERVAL_FAST
-            MENUITEM "&Normal (1s)",                ID_UPDATEINTERVAL_NORMAL
-            MENUITEM "&Below normal (2s)",          ID_UPDATEINTERVAL_BELOWNORMAL
-            MENUITEM "&Slow (5s)",                  ID_UPDATEINTERVAL_SLOW
-            MENUITEM "&Very slow (10s)",            ID_UPDATEINTERVAL_VERYSLOW
-        END
-        MENUITEM "Refresh a&utomatically\aF6",  ID_VIEW_UPDATEAUTOMATICALLY
-    END
-    POPUP "&Tools"
-    BEGIN
-        MENUITEM "&Create service...",          ID_TOOLS_CREATESERVICE
-        MENUITEM "&Hidden processes",           ID_TOOLS_HIDDENPROCESSES
-        MENUITEM "Inspect e&xecutable file...", ID_TOOLS_INSPECTEXECUTABLEFILE
-        MENUITEM "&Pagefiles",                  ID_TOOLS_PAGEFILES
-        MENUITEM "Start &Task Manager",         ID_TOOLS_STARTTASKMANAGER
-        POPUP "&Permissions"
-        BEGIN
-            MENUITEM "Service Control Manager", ID_TOOLS_SCM_PERMISSIONS
-        END
-    END
-    POPUP "&Users"
-    BEGIN
-        MENUITEM "Dummy",                       ID_USERS_DUMMY
-    END
-    POPUP "H&elp"
-    BEGIN
-        MENUITEM "&Log\aCtrl+L",                ID_HELP_LOG
-        MENUITEM "&Donate",                     ID_HELP_DONATE
-        MENUITEM "Debu&g console",              ID_HELP_DEBUGCONSOLE
-        MENUITEM "&About",                      ID_HELP_ABOUT
-    END
-END
-
-IDR_THREAD MENU
-BEGIN
-    POPUP "Thread"
-    BEGIN
-        MENUITEM "&Inspect\aEnter",             ID_THREAD_INSPECT
-        MENUITEM "T&erminate\aDel",             ID_THREAD_TERMINATE
-        MENUITEM "&Suspend",                    ID_THREAD_SUSPEND
-        MENUITEM "Res&ume",                     ID_THREAD_RESUME
-        MENUITEM SEPARATOR
-        MENUITEM "Analy&ze",                    ID_ANALYZE_WAIT
-        MENUITEM "&Affinity",                   ID_THREAD_AFFINITY
-        MENUITEM "Critical",                    ID_THREAD_CRITICAL
-        MENUITEM "Per&missions",                ID_THREAD_PERMISSIONS
-        MENUITEM "&Token",                      ID_THREAD_TOKEN
-        POPUP "&Priority"
-        BEGIN
-            MENUITEM "Time &critical",              ID_PRIORITY_TIMECRITICAL
-            MENUITEM "&Highest",                    ID_PRIORITY_HIGHEST
-            MENUITEM "&Above normal",               ID_PRIORITY_ABOVENORMAL
-            MENUITEM "&Normal",                     ID_PRIORITY_NORMAL
-            MENUITEM "&Below normal",               ID_PRIORITY_BELOWNORMAL
-            MENUITEM "&Lowest",                     ID_PRIORITY_LOWEST
-            MENUITEM "&Idle",                       ID_PRIORITY_IDLE
-        END
-        POPUP "&I/O priority"
-        BEGIN
-            MENUITEM "&High",                       ID_IOPRIORITY_HIGH
-            MENUITEM "&Normal",                     ID_IOPRIORITY_NORMAL
-            MENUITEM "&Low",                        ID_IOPRIORITY_LOW
-            MENUITEM "&Very low",                   ID_IOPRIORITY_VERYLOW
-        END
-        POPUP "Pa&ge priority"
-        BEGIN
-            MENUITEM "&Normal",                     ID_PAGEPRIORITY_NORMAL
-            MENUITEM "&Below normal",               ID_PAGEPRIORITY_BELOWNORMAL
-            MENUITEM "&Medium",                     ID_PAGEPRIORITY_MEDIUM
-            MENUITEM "&Low",                        ID_PAGEPRIORITY_LOW
-            MENUITEM "&Very low",                   ID_PAGEPRIORITY_VERYLOW
-        END
-        MENUITEM SEPARATOR
-        MENUITEM "&Copy\aCtrl+C",               ID_THREAD_COPY
-    END
-END
-
-IDR_HANDLE MENU
-BEGIN
-    POPUP "Handle"
-    BEGIN
-        MENUITEM "C&lose\aDel",                 ID_HANDLE_CLOSE
-        MENUITEM "&Protected",                  ID_HANDLE_PROTECTED
-        MENUITEM "&Inherit",                    ID_HANDLE_INHERIT
-        MENUITEM SEPARATOR
-        MENUITEM "Prope&rties\aEnter",          ID_HANDLE_PROPERTIES
-        MENUITEM SEPARATOR
-        MENUITEM "&Copy\aCtrl+C",               ID_HANDLE_COPY
-    END
-END
-
-IDR_MODULE MENU
-BEGIN
-    POPUP "Module"
-    BEGIN
-        MENUITEM "&Unload\aDel",                ID_MODULE_UNLOAD
-        MENUITEM SEPARATOR
-        MENUITEM "&Inspect\aEnter",             ID_MODULE_INSPECT
-        MENUITEM "&Search online\aCtrl+M",      ID_MODULE_SEARCHONLINE
-        MENUITEM "Open &file location\aCtrl+Enter", ID_MODULE_OPENFILELOCATION
-        MENUITEM "P&roperties",                 ID_MODULE_PROPERTIES
-        MENUITEM "&Copy\aCtrl+C",               ID_MODULE_COPY
-    END
-END
-
-IDR_COMPUTER MENU
-BEGIN
-    POPUP "Computer"
-    BEGIN
-        MENUITEM "&Lock",                       ID_COMPUTER_LOCK
-        MENUITEM "Log o&ff",                    ID_COMPUTER_LOGOFF
-        MENUITEM SEPARATOR
-        MENUITEM "&Sleep",                      ID_COMPUTER_SLEEP
-        MENUITEM "&Hibernate",                  ID_COMPUTER_HIBERNATE
-        MENUITEM SEPARATOR
-        MENUITEM "R&estart",                    ID_COMPUTER_RESTART
-        MENUITEM "Restart to boot &options",    ID_COMPUTER_RESTARTBOOTOPTIONS
-        MENUITEM "Shu&t down",                  ID_COMPUTER_SHUTDOWN
-        MENUITEM "H&ybrid shut down",           ID_COMPUTER_SHUTDOWNHYBRID
-    END
-END
-
-IDR_PROCESS MENU
-BEGIN
-    POPUP "Process"
-    BEGIN
-        MENUITEM "T&erminate\aDel",             ID_PROCESS_TERMINATE
-        MENUITEM "Terminate tree\aShift+Del",   ID_PROCESS_TERMINATETREE
-        MENUITEM "&Suspend",                    ID_PROCESS_SUSPEND
-        MENUITEM "Res&ume",                     ID_PROCESS_RESUME
-        MENUITEM "Res&tart",                    ID_PROCESS_RESTART
-        MENUITEM SEPARATOR
-        MENUITEM "Create dump fi&le...",        ID_PROCESS_CREATEDUMPFILE
-        MENUITEM "De&bug",                      ID_PROCESS_DEBUG
-        MENUITEM "Virtuali&zation",             ID_PROCESS_VIRTUALIZATION
-        MENUITEM SEPARATOR
-        MENUITEM "&Affinity",                   ID_PROCESS_AFFINITY
-        POPUP "&Priority"
-        BEGIN
-            MENUITEM "&Real time",                  ID_PRIORITY_REALTIME
-            MENUITEM "&High",                       ID_PRIORITY_HIGH
-            MENUITEM "&Above normal",               ID_PRIORITY_ABOVENORMAL
-            MENUITEM "&Normal",                     ID_PRIORITY_NORMAL
-            MENUITEM "&Below normal",               ID_PRIORITY_BELOWNORMAL
-            MENUITEM "&Idle",                       ID_PRIORITY_IDLE
-        END
-        POPUP "&I/O priority"
-        BEGIN
-            MENUITEM "&High",                       ID_IOPRIORITY_HIGH
-            MENUITEM "&Normal",                     ID_IOPRIORITY_NORMAL
-            MENUITEM "&Low",                        ID_IOPRIORITY_LOW
-            MENUITEM "&Very low",                   ID_IOPRIORITY_VERYLOW
-        END
-        POPUP "&Miscellaneous"
-        BEGIN
-            MENUITEM "&Critical",                   ID_MISCELLANEOUS_SETCRITICAL
-            MENUITEM "&Detach from debugger",       ID_MISCELLANEOUS_DETACHFROMDEBUGGER
-            MENUITEM "GDI &handles",                ID_MISCELLANEOUS_GDIHANDLES
-            POPUP "Pa&ge priority"
-            BEGIN
-                MENUITEM "&Normal",                     ID_PAGEPRIORITY_NORMAL
-                MENUITEM "&Below normal",               ID_PAGEPRIORITY_BELOWNORMAL
-                MENUITEM "&Medium",                     ID_PAGEPRIORITY_MEDIUM
-                MENUITEM "&Low",                        ID_PAGEPRIORITY_LOW
-                MENUITEM "&Very low",                   ID_PAGEPRIORITY_VERYLOW
-            END
-            MENUITEM "Reduce working &set",         ID_MISCELLANEOUS_REDUCEWORKINGSET
-            MENUITEM "&Run as...",                  ID_MISCELLANEOUS_RUNAS
-            MENUITEM "Run &as this user...",        ID_MISCELLANEOUS_RUNASTHISUSER
-        END
-        POPUP "&Window"
-        BEGIN
-            MENUITEM "Bring to &front",             ID_WINDOW_BRINGTOFRONT
-            MENUITEM "&Restore",                    ID_WINDOW_RESTORE
-            MENUITEM "M&inimize",                   ID_WINDOW_MINIMIZE
-            MENUITEM "M&aximize",                   ID_WINDOW_MAXIMIZE
-            MENUITEM SEPARATOR
-            MENUITEM "&Close",                      ID_WINDOW_CLOSE
-        END
-        MENUITEM SEPARATOR
-        MENUITEM "Search &online\aCtrl+M",      ID_PROCESS_SEARCHONLINE
-        MENUITEM "Open &file location\aCtrl+Enter", ID_PROCESS_OPENFILELOCATION
-        MENUITEM "P&roperties\aEnter",          ID_PROCESS_PROPERTIES
-        MENUITEM "&Copy\aCtrl+C",               ID_PROCESS_COPY
-    END
-END
-
-IDR_SERVICE MENU
-BEGIN
-    POPUP "Service"
-    BEGIN
-        MENUITEM "&Go to process",              ID_SERVICE_GOTOPROCESS
-        MENUITEM "&Start",                      ID_SERVICE_START
-        MENUITEM "C&ontinue",                   ID_SERVICE_CONTINUE
-        MENUITEM "&Pause",                      ID_SERVICE_PAUSE
-        MENUITEM "S&top",                       ID_SERVICE_STOP
-        MENUITEM "&Delete\aDel",                ID_SERVICE_DELETE
-        MENUITEM SEPARATOR
-        MENUITEM "Open &key",                   ID_SERVICE_OPENKEY
-        MENUITEM "Open &file location\aCtrl+Enter", ID_SERVICE_OPENFILELOCATION
-        MENUITEM "P&roperties\aEnter",          ID_SERVICE_PROPERTIES
-        MENUITEM "&Copy\aCtrl+C",               ID_SERVICE_COPY
-    END
-END
-
-IDR_FINDOBJ MENU
-BEGIN
-    POPUP "Object"
-    BEGIN
-        MENUITEM "C&lose\aDel",                 ID_OBJECT_CLOSE
-        MENUITEM SEPARATOR
-        MENUITEM "Go to owning &process",       ID_OBJECT_GOTOOWNINGPROCESS
-        MENUITEM "Prope&rties",                 ID_OBJECT_PROPERTIES
-        MENUITEM SEPARATOR
-        MENUITEM "&Copy\aCtrl+C",               ID_OBJECT_COPY
-    END
-END
-
-IDR_USER MENU
-BEGIN
-    POPUP "User"
-    BEGIN
-        MENUITEM "&Connect",                    ID_USER_CONNECT
-        MENUITEM "&Disconnect",                 ID_USER_DISCONNECT
-        MENUITEM "&Logoff",                     ID_USER_LOGOFF
-        MENUITEM "Rem&ote control",             ID_USER_REMOTECONTROL
-        MENUITEM "Send &message...",            ID_USER_SENDMESSAGE
-        MENUITEM "P&roperties",                 ID_USER_PROPERTIES
-    END
-END
-
-IDR_NETWORK MENU
-BEGIN
-    POPUP "Network"
-    BEGIN
-        MENUITEM "&Go to process\aEnter",       ID_NETWORK_GOTOPROCESS
-        MENUITEM "Go to service",               ID_NETWORK_GOTOSERVICE
-        MENUITEM "C&lose",                      ID_NETWORK_CLOSE
-        MENUITEM SEPARATOR
-        MENUITEM "&Copy\aCtrl+C",               ID_NETWORK_COPY
-    END
-END
-
-IDR_ICON MENU
-BEGIN
-    POPUP "Icon"
-    BEGIN
-        MENUITEM "&Show/Hide Process Hacker",   ID_ICON_SHOWHIDEPROCESSHACKER
-        MENUITEM "System &information",         ID_ICON_SYSTEMINFORMATION
-        POPUP "N&otifications"
-        BEGIN
-            MENUITEM "&Enable all",                 ID_NOTIFICATIONS_ENABLEALL
-            MENUITEM "&Disable all",                ID_NOTIFICATIONS_DISABLEALL
-            MENUITEM SEPARATOR
-            MENUITEM "New &processes",              ID_NOTIFICATIONS_NEWPROCESSES
-            MENUITEM "T&erminated processes",       ID_NOTIFICATIONS_TERMINATEDPROCESSES
-            MENUITEM "New &services",               ID_NOTIFICATIONS_NEWSERVICES
-            MENUITEM "St&arted services",           ID_NOTIFICATIONS_STARTEDSERVICES
-            MENUITEM "St&opped services",           ID_NOTIFICATIONS_STOPPEDSERVICES
-            MENUITEM "&Deleted services",           ID_NOTIFICATIONS_DELETEDSERVICES
-        END
-        POPUP "&Processes"
-        BEGIN
-            MENUITEM "Dummy",                       ID_PROCESSES_DUMMY
-        END
-        MENUITEM SEPARATOR
-        POPUP "&Computer"
-        BEGIN
-            MENUITEM "&Lock",                       ID_COMPUTER_LOCK
-            MENUITEM "Log o&ff",                    ID_COMPUTER_LOGOFF
-            MENUITEM SEPARATOR
-            MENUITEM "&Sleep",                      ID_COMPUTER_SLEEP
-            MENUITEM "&Hibernate",                  ID_COMPUTER_HIBERNATE
-            MENUITEM SEPARATOR
-            MENUITEM "R&estart",                    ID_COMPUTER_RESTART
-            MENUITEM "Restart to boot &options",    ID_COMPUTER_RESTARTBOOTOPTIONS
-            MENUITEM "Shu&t down",                  ID_COMPUTER_SHUTDOWN
-            MENUITEM "H&ybrid shut down",           ID_COMPUTER_SHUTDOWNHYBRID
-        END
-        MENUITEM "E&xit",                       ID_ICON_EXIT
-    END
-END
-
-IDR_MEMORY MENU
-BEGIN
-    POPUP "Memory"
-    BEGIN
-        MENUITEM "&Read/Write memory",          ID_MEMORY_READWRITEMEMORY
-        MENUITEM "&Save...",                    ID_MEMORY_SAVE
-        MENUITEM "Change &protection...",       ID_MEMORY_CHANGEPROTECTION
-        MENUITEM "&Free",                       ID_MEMORY_FREE
-        MENUITEM "&Decommit",                   ID_MEMORY_DECOMMIT
-        MENUITEM SEPARATOR
-        MENUITEM "&Copy\aCtrl+C",               ID_MEMORY_COPY
-    END
-END
-
-IDR_MINIINFO MENU
-BEGIN
-    POPUP "Mini Info"
-    BEGIN
-        POPUP "&Opacity"
-        BEGIN
-            MENUITEM "10%",                         ID_OPACITY_10
-            MENUITEM "20%",                         ID_OPACITY_20
-            MENUITEM "30%",                         ID_OPACITY_30
-            MENUITEM "40%",                         ID_OPACITY_40
-            MENUITEM "50%",                         ID_OPACITY_50
-            MENUITEM "60%",                         ID_OPACITY_60
-            MENUITEM "70%",                         ID_OPACITY_70
-            MENUITEM "80%",                         ID_OPACITY_80
-            MENUITEM "90%",                         ID_OPACITY_90
-            MENUITEM "Opaque",                      ID_OPACITY_OPAQUE
-        END
-        MENUITEM SEPARATOR
-        MENUITEM "&Refresh\aF5",                ID_MINIINFO_REFRESH
-        MENUITEM "Refresh a&utomatically\aF6",  ID_MINIINFO_REFRESHAUTOMATICALLY
-    END
-END
-
-IDR_MINIINFO_PROCESS MENU
-BEGIN
-    POPUP "Process"
-    BEGIN
-        MENUITEM SEPARATOR
-        MENUITEM "&Go to process",              ID_PROCESS_GOTOPROCESS
-    END
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
 // Dialog
 //
 
@@ -467,39 +77,43 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSM
 CAPTION "General"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    PUSHBUTTON      "Permissions",IDC_PERMISSIONS,143,197,50,14
-    PUSHBUTTON      "Terminate",IDC_TERMINATE,197,197,50,14
-    GROUPBOX        "File",IDC_FILE,7,7,246,79
-    ICON            "",IDC_FILEICON,14,18,20,20
+    PUSHBUTTON      "Permissions",IDC_PERMISSIONS,143,218,50,14
+    PUSHBUTTON      "Terminate",IDC_TERMINATE,197,218,50,14
+    GROUPBOX        "File",IDC_FILE,7,7,246,103
+    ICON            "",IDC_FILEICON,14,18,21,20
     EDITTEXT        IDC_NAME,44,17,182,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
     EDITTEXT        IDC_COMPANYNAME,44,29,183,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
     CONTROL         "<a>Company name link</a>",IDC_COMPANYNAME_LINK,"SysLink",LWS_NOPREFIX | NOT WS_VISIBLE | WS_TABSTOP,46,29,183,9
     LTEXT           "Version:",IDC_STATIC,15,41,27,8
     EDITTEXT        IDC_VERSION,44,41,113,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    LTEXT           "Image file name:",IDC_STATIC,15,55,56,8
+    LTEXT           "Image file name (Win32):",IDC_STATIC,15,55,86,8
     EDITTEXT        IDC_FILENAME,15,65,191,12,ES_AUTOHSCROLL | ES_READONLY
     PUSHBUTTON      "Inspect",IDC_INSPECT,210,64,17,15,BS_ICON
     PUSHBUTTON      "Open",IDC_OPENFILENAME,230,64,17,15,BS_ICON
-    GROUPBOX        "Process",IDC_PROCESS,7,92,246,161
-    LTEXT           "Command line:",IDC_STATIC,13,103,50,8
-    EDITTEXT        IDC_CMDLINE,79,101,147,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "Current directory:",IDC_STATIC,13,119,60,8
-    EDITTEXT        IDC_CURDIR,79,117,168,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "Started:",IDC_STATIC,13,135,28,8
-    EDITTEXT        IDC_STARTED,79,133,168,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "PEB address:",IDC_STATIC,13,151,44,8
-    EDITTEXT        IDC_PEBADDRESS,79,149,101,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "Image type:",IDC_PROCESSTYPELABEL,185,151,41,8,NOT WS_VISIBLE
-    LTEXT           "32-bit",IDC_PROCESSTYPETEXT,228,151,20,8,NOT WS_VISIBLE
-    LTEXT           "Parent:",IDC_STATIC,13,167,25,8
-    EDITTEXT        IDC_PARENTPROCESS,79,165,147,12,ES_AUTOHSCROLL | ES_READONLY
-    PUSHBUTTON      "View",IDC_VIEWPARENTPROCESS,230,163,17,15,BS_ICON
-    LTEXT           "Mitigation policies:",IDC_STATIC,13,183,59,8
-    EDITTEXT        IDC_MITIGATION,79,181,126,12,ES_AUTOHSCROLL | ES_READONLY
-    PUSHBUTTON      "Details",IDC_VIEWMITIGATION,209,180,38,14
-    LTEXT           "Protection:",IDC_STATIC,13,200,36,8
-    EDITTEXT        IDC_PROTECTION,51,200,80,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    PUSHBUTTON      "View",IDC_VIEWCOMMANDLINE,230,100,17,15,BS_ICON
+    GROUPBOX        "Process",IDC_PROCESS,7,115,246,139
+    LTEXT           "Command line:",IDC_STATIC,13,124,50,8
+    EDITTEXT        IDC_CMDLINE,79,122,147,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Current directory:",IDC_STATIC,13,140,60,8
+    EDITTEXT        IDC_CURDIR,79,138,168,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Started:",IDC_STATIC,13,156,28,8
+    EDITTEXT        IDC_STARTED,79,154,168,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "PEB address:",IDC_STATIC,13,172,44,8
+    EDITTEXT        IDC_PEBADDRESS,79,170,101,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Image type:",IDC_PROCESSTYPELABEL,185,172,41,8,NOT WS_VISIBLE
+    LTEXT           "32-bit",IDC_PROCESSTYPETEXT,228,172,20,8,NOT WS_VISIBLE
+    LTEXT           "Parent:",IDC_STATIC,13,188,25,8
+    EDITTEXT        IDC_PARENTPROCESS,79,186,147,12,ES_AUTOHSCROLL | ES_READONLY
+    PUSHBUTTON      "View",IDC_VIEWPARENTPROCESS,230,185,17,15,BS_ICON
+    LTEXT           "Mitigation policies:",IDC_STATIC,13,204,59,8
+    EDITTEXT        IDC_MITIGATION,79,202,126,12,ES_AUTOHSCROLL | ES_READONLY
+    PUSHBUTTON      "Details",IDC_VIEWMITIGATION,209,202,38,14
+    LTEXT           "Protection:",IDC_STATIC,13,222,36,8
+    EDITTEXT        IDC_PROTECTION,51,222,80,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    PUSHBUTTON      "View",IDC_VIEWCOMMANDLINE,230,122,17,15,BS_ICON
+    LTEXT           "Image file name:",IDC_STATIC,15,80,86,8
+    EDITTEXT        IDC_FILENAMEWIN32,15,91,191,12,ES_AUTOHSCROLL | ES_READONLY
+    PUSHBUTTON      "Inspect",IDC_INSPECT2,210,89,17,15,BS_ICON
+    PUSHBUTTON      "Open",IDC_OPENFILENAME2,230,89,17,15,BS_ICON
 END
 
 IDD_PROCMODULES DIALOGEX 0, 0, 260, 260
@@ -519,7 +133,7 @@ FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     CONTROL         "",IDC_LIST,"PhTreeNew",WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_TABSTOP | 0xa,2,19,256,239,WS_EX_CLIENTEDGE
     EDITTEXT        IDC_SEARCH,114,3,144,14,ES_AUTOHSCROLL
-    PUSHBUTTON      "Options",IDC_FILTEROPTIONS,2,2,50,14
+    PUSHBUTTON      "Options",IDC_OPTIONS,2,2,50,14
 END
 
 IDD_PROCHANDLES DIALOGEX 0, 0, 260, 260
@@ -562,7 +176,7 @@ BEGIN
     ICON            IDI_PROCESSHACKER,IDC_STATIC,16,11,21,20
     LTEXT           "Process Hacker",IDC_ABOUT_NAME,45,10,192,8
     LTEXT           "Licensed under the GNU GPL, v3.",IDC_STATIC,45,23,193,8
-    LTEXT           "Copyright (c) 2008-2019",IDC_STATIC,45,36,80,8
+    LTEXT           "Copyright (c) 2008-2020",IDC_STATIC,45,36,80,8
     CONTROL         "Credits.",IDC_CREDITS,"SysLink",WS_TABSTOP,15,49,248,121
     CONTROL         "<a href=""https://processhacker.sourceforge.io"">Process Hacker on SourceForge.net</a>",IDC_LINK_SF,
                     "SysLink",WS_TABSTOP,7,177,130,11
@@ -712,13 +326,13 @@ BEGIN
 END
 
 IDD_PAGEFILES DIALOGEX 0, 0, 322, 162
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Pagefiles"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    CONTROL         "",IDC_LIST,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_ALIGNLEFT | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,7,7,308,128
-    PUSHBUTTON      "Refresh",IDC_REFRESH,211,141,50,14
-    DEFPUSHBUTTON   "Close",IDOK,265,141,50,14
+    CONTROL         "",IDC_LIST,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_ALIGNLEFT | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,2,2,318,142
+    PUSHBUTTON      "Refresh",IDC_REFRESH,215,146,50,14
+    DEFPUSHBUTTON   "Close",IDOK,269,146,50,14
 END
 
 IDD_TOKGENERAL DIALOGEX 0, 0, 270, 228
@@ -756,18 +370,7 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSM
 CAPTION "Advanced"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    LTEXT           "Type:",IDC_STATIC,7,8,20,8
-    EDITTEXT        IDC_TYPE,81,7,116,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "Impersonation level:",IDC_STATIC,7,26,68,8
-    EDITTEXT        IDC_IMPERSONATIONLEVEL,81,24,116,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "Token LUID:",IDC_STATIC,7,43,55,8
-    EDITTEXT        IDC_TOKENLUID,81,41,116,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "Authentication LUID:",IDC_STATIC,7,61,68,8
-    EDITTEXT        IDC_AUTHENTICATIONLUID,81,59,116,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "Memory used:",IDC_STATIC,7,78,47,8
-    EDITTEXT        IDC_MEMORYUSED,81,76,116,12,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "Memory available:",IDC_STATIC,7,95,60,8
-    EDITTEXT        IDC_MEMORYAVAILABLE,81,93,116,12,ES_AUTOHSCROLL | ES_READONLY
+    CONTROL         "",IDC_LIST,"SysListView32",LVS_REPORT | LVS_ALIGNLEFT | WS_TABSTOP,0,0,236,186
 END
 
 IDD_OBJJOB DIALOGEX 0, 0, 260, 260
@@ -989,32 +592,13 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,225,142,50,14
 END
 
-IDD_SESSION DIALOGEX 0, 0, 201, 149
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+IDD_SESSION DIALOGEX 0, 0, 317, 267
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Session Properties"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    DEFPUSHBUTTON   "Close",IDOK,144,128,50,14
-    LTEXT           "User name:",IDC_STATIC,7,7,38,8
-    LTEXT           "Session ID:",IDC_STATIC,7,18,37,8
-    LTEXT           "State:",IDC_STATIC,7,29,21,8
-    LTEXT           "Client name:",IDC_STATIC,7,84,41,8
-    LTEXT           "Client address:",IDC_STATIC,7,95,49,8
-    LTEXT           "Client display:",IDC_STATIC,7,106,46,8
-    LTEXT           "N/A",IDC_USERNAME,66,7,128,8
-    LTEXT           "N/A",IDC_SESSIONID,66,18,128,8
-    LTEXT           "N/A",IDC_STATE,66,29,128,8
-    LTEXT           "N/A",IDC_CLIENTNAME,66,84,128,8
-    LTEXT           "N/A",IDC_CLIENTADDRESS,66,95,128,8
-    LTEXT           "N/A",IDC_CLIENTDISPLAY,66,106,128,8
-    LTEXT           "Logon time:",IDC_STATIC,7,40,38,8
-    LTEXT           "N/A",IDC_LOGONTIME,66,40,128,8
-    LTEXT           "Connect time:",IDC_STATIC,7,51,46,8
-    LTEXT           "Disconnect time:",IDC_STATIC,7,62,54,8
-    LTEXT           "Last input time:",IDC_STATIC,7,73,50,8
-    LTEXT           "N/A",IDC_CONNECTTIME,66,51,128,8
-    LTEXT           "N/A",IDC_DISCONNECTTIME,66,62,128,8
-    LTEXT           "N/A",IDC_LASTINPUTTIME,66,74,128,8
+    DEFPUSHBUTTON   "Close",IDOK,265,251,50,14
+    CONTROL         "",IDC_LIST,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | LVS_ALIGNLEFT | WS_BORDER | WS_TABSTOP,2,2,313,247
 END
 
 IDD_PROCMEMORY DIALOGEX 0, 0, 260, 260
@@ -1356,7 +940,7 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSM
 CAPTION "Capabilities"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    CONTROL         "",IDC_LIST,"PhTreeNew",WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_TABSTOP | 0x32,0,0,270,228,WS_EX_CLIENTEDGE
+    CONTROL         "",IDC_LIST,"PhTreeNew",WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_TABSTOP | 0x32,0,0,270,228
 END
 
 IDD_TOKATTRIBUTES DIALOGEX 0, 0, 270, 228
@@ -1364,7 +948,7 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSM
 CAPTION "Attributes"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    CONTROL         "",IDC_LIST,"PhTreeNew",WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_TABSTOP | 0x32,0,0,270,228,WS_EX_CLIENTEDGE
+    CONTROL         "",IDC_LIST,"PhTreeNew",WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_TABSTOP | 0x32,0,0,270,228
 END
 
 IDD_SYSINFO_CPU DIALOGEX 0, 0, 316, 195
@@ -1493,6 +1077,11 @@ BEGIN
     PUSHBUTTON      "&More",IDC_MORE,242,152,50,14
     RTEXT           "Static",IDC_ZPHYSICALRESERVED_V,167,31,55,8,SS_ENDELLIPSIS
     LTEXT           "Reserved",IDC_STATIC,120,31,32,8
+    GROUPBOX        "Mapped IO",IDC_STATIC,112,132,118,36
+    LTEXT           "Mapped reads",IDC_STATIC,119,145,68,8
+    RTEXT           "Static",IDC_ZMAPPEDREADIO,180,145,42,8,SS_ENDELLIPSIS
+    LTEXT           "Mapped writes",IDC_STATIC,119,156,68,8
+    RTEXT           "Static",IDC_ZMAPPEDWRITEIO,180,156,42,8,SS_ENDELLIPSIS
 END
 
 IDD_SYSINFO_MEM DIALOGEX 0, 0, 316, 250
@@ -1720,6 +1309,37 @@ BEGIN
     CONTROL         "",IDC_COLUMNSETLIST,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_EDITLABELS | LVS_ALIGNLEFT | LVS_NOCOLUMNHEADER | WS_BORDER | WS_TABSTOP,4,4,170,180
 END
 
+IDD_RUNFILEDLG DIALOGEX 0, 0, 235, 105
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Run"
+FONT 9, "Segoe UI", 0, 0, 0x1
+BEGIN
+    ICON            100,IDC_FILEICON,7,11,20,20
+    LTEXT           "Type the name of a program, folder, document, or Internet resource, and Windows will open it for you.",IDC_STATIC,36,11,182,22
+    LTEXT           "&Open:",IDC_STATIC,7,39,28,10
+    COMBOBOX        IDC_PROGRAMCOMBO,36,37,183,200,CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_DISABLENOSCROLL | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK",IDOK,62,82,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,116,82,50,14
+    PUSHBUTTON      "&Browse...",IDC_BROWSE,170,82,50,14
+    CONTROL         "Create this task with TrustedInstaller privileges.",IDC_TRUSTEDINSTALLER,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,40,62,180,10
+    CONTROL         "Create this task with Administrative privileges.",IDC_TOGGLEELEVATION,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,40,51,180,10
+END
+
+IDD_LIVEDUMP DIALOGEX 0, 0, 191, 97
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Live kernel dump"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "Use dump storage stack",IDC_DUMPSTACK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,52,93,10
+    CONTROL         "Compress memory pages",IDC_COMPRESS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,7,96,10
+    CONTROL         "Include UserSpace memory pages",IDC_USERMODE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,22,124,10
+    CONTROL         "Include Hypervisor memory pages",IDC_HYPERVISOR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,37,125,10
+    DEFPUSHBUTTON   "Save",IDOK,80,76,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,134,76,50,14
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -1734,7 +1354,7 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 253
         TOPMARGIN, 7
-        BOTTOMMARGIN, 253
+        BOTTOMMARGIN, 254
     END
 
     IDD_PROCMODULES, DIALOG
@@ -1855,10 +1475,10 @@ BEGIN
 
     IDD_PAGEFILES, DIALOG
     BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 315
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 155
+        LEFTMARGIN, 2
+        RIGHTMARGIN, 320
+        TOPMARGIN, 2
+        BOTTOMMARGIN, 160
     END
 
     IDD_TOKGENERAL, DIALOG
@@ -1871,10 +1491,6 @@ BEGIN
 
     IDD_TOKADVANCED, DIALOG
     BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 229
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 179
     END
 
     IDD_OBJJOB, DIALOG
@@ -1955,10 +1571,11 @@ BEGIN
 
     IDD_SESSION, DIALOG
     BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 194
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 142
+        LEFTMARGIN, 2
+        RIGHTMARGIN, 315
+        VERTGUIDE, 164
+        TOPMARGIN, 2
+        BOTTOMMARGIN, 265
     END
 
     IDD_PROCMEMORY, DIALOG
@@ -2269,6 +1886,18 @@ BEGIN
         RIGHTMARGIN, 227
         TOPMARGIN, 4
         BOTTOMMARGIN, 184
+    END
+
+    IDD_RUNFILEDLG, DIALOG
+    BEGIN
+    END
+
+    IDD_LIVEDUMP, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 184
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 90
     END
 END
 #endif    // APSTUDIO_INVOKED

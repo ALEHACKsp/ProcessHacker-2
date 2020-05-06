@@ -27,11 +27,13 @@
 extern "C" {
 #endif
 
+_Success_(return)
 BOOLEAN PhAppResolverGetAppIdForProcess(
     _In_ HANDLE ProcessId,
     _Out_ PPH_STRING *ApplicationUserModelId
     );
 
+_Success_(return)
 BOOLEAN PhAppResolverGetAppIdForWindow(
     _In_ HWND WindowHandle,
     _Out_ PPH_STRING *ApplicationUserModelId
@@ -41,6 +43,16 @@ HRESULT PhAppResolverActivateAppId(
     _In_ PPH_STRING AppUserModelId,
     _In_opt_ PWSTR CommandLine,
     _Out_opt_ HANDLE *ProcessId
+    );
+
+typedef struct _PH_PACKAGE_TASK_ENTRY
+{
+    PPH_STRING TaskName;
+    GUID TaskGuid;
+} PH_PACKAGE_TASK_ENTRY, *PPH_PACKAGE_TASK_ENTRY;
+
+PPH_LIST PhAppResolverEnumeratePackageBackgroundTasks(
+    _In_ PPH_STRING PackageFullName
     );
 
 PPH_STRING PhGetAppContainerName(

@@ -136,6 +136,7 @@ VOID PhInitializeNetworkTreeList(
     PhAddTreeNewColumnEx(hwnd, PHNETLC_TIMESTAMP, FALSE, L"Time stamp", 100, PH_ALIGN_LEFT, -1, 0, TRUE);
     PhAddTreeNewColumn(hwnd, PHNETLC_LOCALHOSTNAME, FALSE, L"Local hostname", 120, PH_ALIGN_LEFT, -1, 0);
     PhAddTreeNewColumn(hwnd, PHNETLC_REMOTEHOSTNAME, FALSE, L"Remote hostname", 120, PH_ALIGN_LEFT, -1, 0);
+    PhAddTreeNewColumn(hwnd, PHNETLC_PID, FALSE, L"PID", 50, PH_ALIGN_RIGHT, 0, DT_RIGHT);
 
     TreeNew_SetRedraw(hwnd, TRUE);
 
@@ -296,6 +297,7 @@ VOID PhpRemoveNetworkNode(
 
     if (NetworkNode->ProcessNameText) PhDereferenceObject(NetworkNode->ProcessNameText);
     if (NetworkNode->TimeStampText) PhDereferenceObject(NetworkNode->TimeStampText);
+    if (NetworkNode->PidText) PhDereferenceObject(NetworkNode->PidText);
     if (NetworkNode->TooltipText) PhDereferenceObject(NetworkNode->TooltipText);
 
     PhDereferenceObject(NetworkNode->NetworkItem);
@@ -313,14 +315,14 @@ VOID PhUpdateNetworkNode(
     PhClearReference(&NetworkNode->TooltipText);
 
     PhInvalidateTreeNewNode(&NetworkNode->Node, TN_CACHE_ICON);
-    TreeNew_NodesStructured(NetworkTreeListHandle);
+    TreeNew_InvalidateNode(NetworkTreeListHandle, &NetworkNode->Node);
 }
 
 VOID PhTickNetworkNodes(
     VOID
     )
 {
-    if (NetworkTreeListSortOrder != NoSortOrder && NetworkTreeListSortColumn >= PHNETLC_MAXIMUM)
+    if (NetworkTreeListSortOrder != NoSortOrder)
     {
         // Sorting is on, but it's not one of our columns. Force a rebuild. (If it was one of our
         // columns, the restructure would have been handled in PhUpdateNetworkNode.)
@@ -371,7 +373,18 @@ END_SORT_FUNCTION
 
 BEGIN_SORT_FUNCTION(LocalAddress)
 {
-    sortResult = PhCompareStringZ(networkItem1->LocalAddressString, networkItem2->LocalAddressString, FALSE);
+    if (networkItem1->ProtocolType & PH_IPV4_NETWORK_TYPE && networkItem2->ProtocolType & PH_IPV4_NETWORK_TYPE)
+    {
+        sortResult = uintcmp(networkItem1->LocalEndpoint.Address.InAddr.s_addr, networkItem2->LocalEndpoint.Address.InAddr.s_addr);
+    }
+    else if (networkItem1->ProtocolType & PH_IPV6_NETWORK_TYPE && networkItem2->ProtocolType & PH_IPV6_NETWORK_TYPE)
+    {
+        sortResult = memcmp(networkItem1->LocalEndpoint.Address.In6Addr.s6_addr, networkItem2->LocalEndpoint.Address.In6Addr.s6_addr, sizeof(IN6_ADDR));
+    }
+    else
+    {
+        sortResult = PhCompareStringZ(networkItem1->LocalAddressString, networkItem2->LocalAddressString, FALSE);
+    }
 }
 END_SORT_FUNCTION
 
@@ -389,7 +402,18 @@ END_SORT_FUNCTION
 
 BEGIN_SORT_FUNCTION(RemoteAddress)
 {
-    sortResult = PhCompareStringZ(networkItem1->RemoteAddressString, networkItem2->RemoteAddressString, FALSE);
+    if (networkItem1->ProtocolType & PH_IPV4_NETWORK_TYPE && networkItem2->ProtocolType & PH_IPV4_NETWORK_TYPE)
+    {
+        sortResult = uintcmp(networkItem1->RemoteEndpoint.Address.InAddr.s_addr, networkItem2->RemoteEndpoint.Address.InAddr.s_addr);
+    }
+    else if (networkItem1->ProtocolType & PH_IPV6_NETWORK_TYPE && networkItem2->ProtocolType & PH_IPV6_NETWORK_TYPE)
+    {
+        sortResult = memcmp(networkItem1->RemoteEndpoint.Address.In6Addr.s6_addr, networkItem2->RemoteEndpoint.Address.In6Addr.s6_addr, sizeof(IN6_ADDR));
+    }
+    else
+    {
+        sortResult = PhCompareStringZ(networkItem1->RemoteAddressString, networkItem2->RemoteAddressString, FALSE);
+    }
 }
 END_SORT_FUNCTION
 
@@ -429,6 +453,12 @@ BEGIN_SORT_FUNCTION(TimeStamp)
 }
 END_SORT_FUNCTION
 
+BEGIN_SORT_FUNCTION(Pid)
+{
+    sortResult = intptrcmp((LONG_PTR)networkItem1->ProcessId, (LONG_PTR)networkItem2->ProcessId);
+}
+END_SORT_FUNCTION
+
 BOOLEAN NTAPI PhpNetworkTreeNewCallback(
     _In_ HWND hwnd,
     _In_ PH_TREENEW_MESSAGE Message,
@@ -448,6 +478,9 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
         {
             PPH_TREENEW_GET_CHILDREN getChildren = Parameter1;
 
+            if (!getChildren)
+                break;
+
             if (!getChildren->Node)
             {
                 static PVOID sortFunctions[] =
@@ -462,7 +495,8 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
                     SORT_FUNCTION(Owner),
                     SORT_FUNCTION(TimeStamp),
                     SORT_FUNCTION(LocalHostname),
-                    SORT_FUNCTION(RemoteHostname)
+                    SORT_FUNCTION(RemoteHostname),
+                    SORT_FUNCTION(Pid)
                 };
                 int (__cdecl *sortFunction)(const void *, const void *);
 
@@ -494,6 +528,9 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
         {
             PPH_TREENEW_IS_LEAF isLeaf = Parameter1;
 
+            if (!isLeaf)
+                break;
+
             isLeaf->IsLeaf = TRUE;
         }
         return TRUE;
@@ -501,6 +538,9 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
         {
             PPH_TREENEW_GET_CELL_TEXT getCellText = Parameter1;
             PPH_NETWORK_ITEM networkItem;
+
+            if (!getCellText)
+                break;
 
             node = (PPH_NETWORK_NODE)getCellText->Node;
             networkItem = node->NetworkItem;
@@ -556,6 +596,19 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
                     }
                 }
                 break;
+            case PHNETLC_PID:
+                {
+                    PH_FORMAT format[1];
+
+                    if (networkItem->ProcessId)
+                        PhInitFormatU(&format[0], HandleToUlong(networkItem->ProcessId));
+                    else
+                        PhInitFormatS(&format[0], L"Waiting connections");
+
+                    PhMoveReference(&node->PidText, PhFormat(format, 1, 96));
+                    getCellText->Text = node->PidText->sr;
+                }
+                break;
             default:
                 return FALSE;
             }
@@ -567,12 +620,13 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
         {
             PPH_TREENEW_GET_NODE_ICON getNodeIcon = Parameter1;
 
+            if (!getNodeIcon)
+                break;
+
             node = (PPH_NETWORK_NODE)getNodeIcon->Node;
 
             if (node->NetworkItem->ProcessIconValid && node->NetworkItem->ProcessIcon)
             {
-                // TODO: Check if the icon handle is actually valid, since the process item
-                // might get destroyed while the network node is still valid.
                 getNodeIcon->Icon = node->NetworkItem->ProcessIcon;
             }
             else
@@ -587,6 +641,9 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
         {
             PPH_TREENEW_GET_CELL_TOOLTIP getCellTooltip = Parameter1;
             PPH_PROCESS_ITEM processItem;
+
+            if (!getCellTooltip)
+                break;
 
             node = (PPH_NETWORK_NODE)getCellTooltip->Node;
 
@@ -604,9 +661,9 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
 
             if (!PhIsNullOrEmptyString(node->TooltipText))
             {
-                getCellTooltip->Text = node->TooltipText->sr;
+                getCellTooltip->Text = PhGetStringRef(node->TooltipText);
                 getCellTooltip->Unfolding = FALSE;
-                getCellTooltip->MaximumWidth = -1;
+                getCellTooltip->MaximumWidth = ULONG_MAX;
             }
             else
             {
@@ -624,6 +681,9 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
     case TreeNewKeyDown:
         {
             PPH_TREENEW_KEY_EVENT keyEvent = Parameter1;
+
+            if (!keyEvent)
+                break;
 
             switch (keyEvent->VirtualKey)
             {
@@ -666,12 +726,19 @@ BOOLEAN NTAPI PhpNetworkTreeNewCallback(
         {
             PPH_TREENEW_CONTEXT_MENU contextMenu = Parameter1;
 
+            if (!contextMenu)
+                break;
+
             PhShowNetworkContextMenu(contextMenu);
         }
         return TRUE;
     case TreeNewGetNodeColor:
         {
             PPH_TREENEW_GET_NODE_COLOR getNodeColor = Parameter1;
+
+            if (!getNodeColor)
+                break;
+
             node = (PPH_NETWORK_NODE)getNodeColor->Node;
 
             if (!node->NetworkItem)
@@ -703,21 +770,21 @@ PPH_STRING PhpGetNetworkItemProcessName(
     _In_ PPH_NETWORK_ITEM NetworkItem
     )
 {
-    PH_FORMAT format[4];
+    PH_FORMAT format[1];
 
-    if (!NetworkItem->ProcessId)
-        return PhCreateString(L"Waiting connections");
-
-    PhInitFormatS(&format[1], L" (");
-    PhInitFormatU(&format[2], HandleToUlong(NetworkItem->ProcessId));
-    PhInitFormatC(&format[3], ')');
-
-    if (NetworkItem->ProcessName)
-        PhInitFormatSR(&format[0], NetworkItem->ProcessName->sr);
+    if (NetworkItem->ProcessId)
+    {
+        if (NetworkItem->ProcessName)
+            PhInitFormatSR(&format[0], NetworkItem->ProcessName->sr);
+        else
+            PhInitFormatS(&format[0], L"Unknown process");
+    }
     else
-        PhInitFormatS(&format[0], L"Unknown process");
+    {
+        PhInitFormatS(&format[0], L"Waiting connections");
+    }
 
-    return PhFormat(format, 4, 96);
+    return PhFormat(format, 1, 96);
 }
 
 PPH_NETWORK_ITEM PhGetSelectedNetworkItem(

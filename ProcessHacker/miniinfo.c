@@ -3,7 +3,7 @@
  *   mini information window
  *
  * Copyright (C) 2015-2016 wj32
- * Copyright (C) 2017 dmex
+ * Copyright (C) 2017-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -81,13 +81,13 @@ VOID PhPinMiniInformation(
     if (PinDelayMs && PinCount < 0)
     {
         PhMipDelayedPinAdjustments[PinType] = PinCount;
-        SetTimer(PhMipContainerWindow, MIP_TIMER_PIN_FIRST + PinType, PinDelayMs, NULL);
+        SetTimer(PhMipContainerWindow, (UINT_PTR)MIP_TIMER_PIN_FIRST + PinType, PinDelayMs, NULL);
         return;
     }
     else
     {
         PhMipDelayedPinAdjustments[PinType] = 0;
-        KillTimer(PhMipContainerWindow, MIP_TIMER_PIN_FIRST + PinType);
+        KillTimer(PhMipContainerWindow, (UINT_PTR)MIP_TIMER_PIN_FIRST + PinType);
     }
 
     adjustPinResult = PhMipAdjustPin(PinType, PinCount);
@@ -123,7 +123,7 @@ VOID PhPinMiniInformation(
 
             PhMipContainerWindow = CreateWindow(
                 MAKEINTATOM(windowAtom),
-                PhGetIntegerSetting(L"EnableWindowText") ? L"Process Hacker" : NULL,
+                PhApplicationName,
                 WS_BORDER | WS_THICKFRAME | WS_POPUP,
                 0,
                 0,
@@ -192,7 +192,7 @@ VOID PhPinMiniInformation(
             SetActiveWindow(PhMipContainerWindow);
     }
 
-    if (Flags & PH_MINIINFO_ACTIVATE_WINDOW)
+    if ((Flags & PH_MINIINFO_ACTIVATE_WINDOW) && PhMipContainerWindow)
         SetForegroundWindow(PhMipContainerWindow);
 
     if (SectionName && (!PhMipPinned || !(Flags & PH_MINIINFO_DONT_CHANGE_SECTION_IF_PINNED)))
@@ -486,7 +486,7 @@ VOID PhMipOnShowWindow(
     SectionList = PhCreateList(8);
     PhMipInitializeParameters();
 
-    SendMessage(GetDlgItem(PhMipWindow, IDC_SECTION), WM_SETFONT, (WPARAM)CurrentParameters.MediumFont, FALSE);
+    SetWindowFont(GetDlgItem(PhMipWindow, IDC_SECTION), CurrentParameters.MediumFont, FALSE);
 
     PhMipCreateInternalListSection(L"CPU", 0, PhMipCpuListSectionCallback);
     PhMipCreateInternalListSection(L"Commit charge", 0, PhMipCommitListSectionCallback);
@@ -538,6 +538,7 @@ VOID PhMipOnCommand(
     }
 }
 
+_Success_(return)
 BOOLEAN PhMipOnNotify(
     _In_ NMHDR *Header,
     _Out_ LRESULT *Result
@@ -546,6 +547,7 @@ BOOLEAN PhMipOnNotify(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN PhMipOnCtlColorXxx(
     _In_ ULONG Message,
     _In_ HWND hwnd,
@@ -783,19 +785,19 @@ VOID PhMipInitializeParameters(
     logFont.lfHeight -= PhMultiplyDivide(2, PhGlobalDpi, 72);
     CurrentParameters.MediumFont = CreateFontIndirect(&logFont);
 
-    originalFont = SelectObject(hdc, CurrentParameters.Font);
+    originalFont = SelectFont(hdc, CurrentParameters.Font);
     GetTextMetrics(hdc, &textMetrics);
     CurrentParameters.FontHeight = textMetrics.tmHeight;
     CurrentParameters.FontAverageWidth = textMetrics.tmAveCharWidth;
 
-    SelectObject(hdc, CurrentParameters.MediumFont);
+    SelectFont(hdc, CurrentParameters.MediumFont);
     GetTextMetrics(hdc, &textMetrics);
     CurrentParameters.MediumFontHeight = textMetrics.tmHeight;
     CurrentParameters.MediumFontAverageWidth = textMetrics.tmAveCharWidth;
 
     CurrentParameters.SetSectionText = PhMipSetSectionText;
 
-    SelectObject(hdc, originalFont);
+    SelectFont(hdc, originalFont);
     ReleaseDC(PhMipWindow, hdc);
 }
 
@@ -805,9 +807,7 @@ PPH_MINIINFO_SECTION PhMipCreateSection(
 {
     PPH_MINIINFO_SECTION section;
 
-    section = PhAllocate(sizeof(PH_MINIINFO_SECTION));
-    memset(section, 0, sizeof(PH_MINIINFO_SECTION));
-
+    section = PhAllocateZero(sizeof(PH_MINIINFO_SECTION));
     section->Name = Template->Name;
     section->Flags = Template->Flags;
     section->Callback = Template->Callback;
@@ -1071,7 +1071,7 @@ VOID PhMipShowSectionMenu(
             NULL,
             section
             );
-        PhInsertEMenuItem(menu, menuItem, -1);
+        PhInsertEMenuItem(menu, menuItem, ULONG_MAX);
     }
 
     GetCursorPos(&point);
@@ -1087,6 +1087,33 @@ VOID PhMipShowSectionMenu(
     PhMipEndChildControlPin();
 }
 
+PPH_EMENU PhpMipCreateMenu(
+    VOID
+    )
+{
+    PPH_EMENU menu;
+    PPH_EMENU_ITEM menuItem;
+
+    menu = PhCreateEMenu();
+    menuItem = PhCreateEMenuItem(0, 0, L"&Opacity", NULL, NULL);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_10, L"10%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_20, L"20%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_30, L"30%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_40, L"40%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_50, L"50%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_60, L"60%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_70, L"70%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_80, L"80%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_90, L"90%", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menuItem, PhCreateEMenuItem(0, ID_OPACITY_OPAQUE, L"Opaque", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menu, menuItem, ULONG_MAX);
+    PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+    PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MINIINFO_REFRESH, L"&Refresh\bF5", NULL, NULL), ULONG_MAX);
+    PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MINIINFO_REFRESHAUTOMATICALLY, L"Refresh a&utomatically\bF6", NULL, NULL), ULONG_MAX);
+
+    return menu;
+}
+
 VOID PhMipShowOptionsMenu(
     VOID
     )
@@ -1097,8 +1124,10 @@ VOID PhMipShowOptionsMenu(
     RECT rect;
 
     PhMipBeginChildControlPin();
-    menu = PhCreateEMenu();
-    PhLoadResourceEMenuItem(menu, PhInstanceHandle, MAKEINTRESOURCE(IDR_MINIINFO), 0);
+
+    // Menu
+
+    menu = PhpMipCreateMenu(); 
 
     // Opacity
 
@@ -1192,9 +1221,7 @@ PPH_MINIINFO_LIST_SECTION PhMipCreateListSection(
     PPH_MINIINFO_LIST_SECTION listSection;
     PH_MINIINFO_SECTION section;
 
-    listSection = PhAllocate(sizeof(PH_MINIINFO_LIST_SECTION));
-    memset(listSection, 0, sizeof(PH_MINIINFO_LIST_SECTION));
-
+    listSection = PhAllocateZero(sizeof(PH_MINIINFO_LIST_SECTION));
     listSection->Context = Template->Context;
     listSection->Callback = Template->Callback;
 
@@ -1268,6 +1295,9 @@ BOOLEAN PhMipListSectionCallback(
     case MiniInfoCreateDialog:
         {
             PPH_MINIINFO_CREATE_DIALOG createDialog = Parameter1;
+
+            if (!createDialog)
+                break;
 
             createDialog->Instance = PhInstanceHandle;
             createDialog->Template = MAKEINTRESOURCE(IDD_MINIINFO_LIST);
@@ -1354,6 +1384,9 @@ VOID PhMipListSectionSortFunction(
     PPH_MINIINFO_LIST_SECTION listSection = Context;
     PH_MINIINFO_LIST_SECTION_SORT_LIST sortList;
 
+    if (!listSection)
+        return;
+
     sortList.List = List;
     listSection->Callback(listSection, MiListSectionSortProcessList, &sortList, NULL);
 }
@@ -1403,15 +1436,13 @@ VOID PhMipClearListSection(
     _In_ PPH_MINIINFO_LIST_SECTION ListSection
     )
 {
-    ULONG i;
-
     if (ListSection->ProcessGroupList)
     {
         PhFreeProcessGroupList(ListSection->ProcessGroupList);
         ListSection->ProcessGroupList = NULL;
     }
 
-    for (i = 0; i < ListSection->NodeList->Count; i++)
+    for (ULONG i = 0; i < ListSection->NodeList->Count; i++)
         PhMipDestroyGroupNode(ListSection->NodeList->Items[i]);
 
     PhClearList(ListSection->NodeList);
@@ -1436,12 +1467,6 @@ PPH_MIP_GROUP_NODE PhMipAddGroupNode(
     _In_ PPH_PROCESS_GROUP ProcessGroup
     )
 {
-    // This is an undocumented function exported by user32.dll that
-    // retrieves the hung window represented by a ghost window.
-    static HWND (WINAPI *HungWindowFromGhostWindow_I)(
-        _In_ HWND hWnd
-        );
-
     PPH_MIP_GROUP_NODE node;
 
     node = PhAllocate(sizeof(PH_MIP_GROUP_NODE));
@@ -1455,11 +1480,8 @@ PPH_MIP_GROUP_NODE PhMipAddGroupNode(
 
     if (node->RepresentativeIsHung)
     {
-        if (!HungWindowFromGhostWindow_I)
-            HungWindowFromGhostWindow_I = PhGetDllProcedureAddress(L"user32.dll", "HungWindowFromGhostWindow", 0);
-
         // Make sure this is a real hung window, not a ghost window.
-        if (HungWindowFromGhostWindow_I && HungWindowFromGhostWindow_I(ProcessGroup->WindowHandle))
+        if (PhHungWindowFromGhostWindow(ProcessGroup->WindowHandle))
             node->RepresentativeIsHung = FALSE;
     }
 
@@ -1540,7 +1562,7 @@ BOOLEAN PhMipListSectionTreeNewCallback(
                 0, NULL, DI_NORMAL);
             rect.left += (MIP_CELL_PADDING - MIP_ICON_PADDING) + PhLargeIconSize.X + MIP_CELL_PADDING;
             rect.top += MIP_CELL_PADDING - MIP_ICON_PADDING;
-            SelectObject(hdc, CurrentParameters.Font);
+            SelectFont(hdc, CurrentParameters.Font);
 
             // This color changes depending on whether the node is selected, etc.
             originalTextColor = GetTextColor(hdc);
@@ -1674,7 +1696,7 @@ BOOLEAN PhMipListSectionTreeNewCallback(
             {
                 getCellTooltip->Text = node->TooltipText->sr;
                 getCellTooltip->Unfolding = FALSE;
-                getCellTooltip->MaximumWidth = -1;
+                getCellTooltip->MaximumWidth = ULONG_MAX;
             }
             else
             {
@@ -1825,7 +1847,8 @@ VOID PhMipShowListSectionContextMenu(
     menu = PhCreateEMenu();
     // TODO: If there are multiple processes, then create submenus for each process.
     PhAddMiniProcessMenuItems(menu, ListSection->SelectedRepresentativeProcessId);
-    PhLoadResourceEMenuItem(menu, PhInstanceHandle, MAKEINTRESOURCE(IDR_MINIINFO_PROCESS), 0);
+    PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+    PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_PROCESS_GOTOPROCESS, L"&Go to process", NULL, NULL), ULONG_MAX);
     PhSetFlagsEMenuItem(menu, ID_PROCESS_GOTOPROCESS, PH_EMENU_DEFAULT, PH_EMENU_DEFAULT);
 
     if (selectedNode->ProcessGroup->Processes->Count != 1)
@@ -1912,7 +1935,7 @@ VOID PhMipHandleListSectionCommand(
 
             ProcessHacker_ToggleVisible(PhMainWndHandle, TRUE);
             ProcessHacker_SelectTabPage(PhMainWndHandle, 0);
-            PhSelectAndEnsureVisibleProcessNodes((PPH_PROCESS_NODE *)nodes->Items, nodes->Count);
+            PhSelectAndEnsureVisibleProcessNodes((PPH_PROCESS_NODE*)nodes->Items, nodes->Count);
             PhDereferenceObject(nodes);
         }
         break;
@@ -1929,12 +1952,24 @@ BOOLEAN PhMipCpuListSectionCallback(
     switch (Message)
     {
     case MiListSectionTick:
-        ListSection->Section->Parameters->SetSectionText(ListSection->Section,
-            PhaFormatString(L"CPU    %.2f%%", (PhCpuUserUsage + PhCpuKernelUsage) * 100));
+        {
+            PH_FORMAT format[3];
+
+            // CPU    %.2f%%
+            PhInitFormatS(&format[0], L"CPU    ");
+            PhInitFormatF(&format[1], ((DOUBLE)PhCpuUserUsage + PhCpuKernelUsage) * 100, 2);
+            PhInitFormatC(&format[2], L'%');
+
+            ListSection->Section->Parameters->SetSectionText(ListSection->Section,
+                PH_AUTO(PhFormat(format, RTL_NUMBER_OF(format), 16)));
+        }
         break;
     case MiListSectionSortProcessList:
         {
             PPH_MINIINFO_LIST_SECTION_SORT_LIST sortList = Parameter1;
+
+            if (!sortList)
+                break;
 
             qsort(sortList->List->Items, sortList->List->Count,
                 sizeof(PPH_PROCESS_NODE), PhMipCpuListSectionProcessCompareFunction);
@@ -1943,9 +1978,15 @@ BOOLEAN PhMipCpuListSectionCallback(
     case MiListSectionAssignSortData:
         {
             PPH_MINIINFO_LIST_SECTION_ASSIGN_SORT_DATA assignSortData = Parameter1;
-            PPH_LIST processes = assignSortData->ProcessGroup->Processes;
-            FLOAT cpuUsage = 0;
+            PPH_LIST processes;
+            FLOAT cpuUsage;
             ULONG i;
+
+            if (!assignSortData)
+                break;
+
+            processes = assignSortData->ProcessGroup->Processes;
+            cpuUsage = 0;
 
             for (i = 0; i < processes->Count; i++)
                 cpuUsage += ((PPH_PROCESS_ITEM)processes->Items[i])->CpuUsage;
@@ -1957,6 +1998,9 @@ BOOLEAN PhMipCpuListSectionCallback(
         {
             PPH_MINIINFO_LIST_SECTION_SORT_LIST sortList = Parameter1;
 
+            if (!sortList)
+                break;
+
             qsort(sortList->List->Items, sortList->List->Count,
                 sizeof(PPH_MINIINFO_LIST_SECTION_SORT_DATA), PhMipCpuListSectionNodeCompareFunction);
         }
@@ -1964,12 +2008,26 @@ BOOLEAN PhMipCpuListSectionCallback(
     case MiListSectionGetUsageText:
         {
             PPH_MINIINFO_LIST_SECTION_GET_USAGE_TEXT getUsageText = Parameter1;
-            PPH_LIST processes = getUsageText->ProcessGroup->Processes;
-            FLOAT cpuUsage = *(PFLOAT)getUsageText->SortData->UserData * 100;
+            PPH_LIST processes;
+            FLOAT cpuUsage;
             PPH_STRING cpuUsageText;
 
+            if (!getUsageText)
+                break;
+
+            processes = getUsageText->ProcessGroup->Processes;
+            cpuUsage = *(PFLOAT)getUsageText->SortData->UserData * 100;
+
             if (cpuUsage >= 0.01)
-                cpuUsageText = PhFormatString(L"%.2f%%", cpuUsage);
+            {
+                PH_FORMAT format[2];
+
+                // %.2f%%
+                PhInitFormatF(&format[0], cpuUsage, 2);
+                PhInitFormatC(&format[1], L'%');
+
+                cpuUsageText = PhFormat(format, RTL_NUMBER_OF(format), 16);
+            }
             else if (cpuUsage != 0)
                 cpuUsageText = PhCreateString(L"< 0.01%");
             else
@@ -2022,21 +2080,25 @@ BOOLEAN PhMipCommitListSectionCallback(
     {
     case MiListSectionTick:
         {
-            PH_FORMAT format[5];
             DOUBLE commitFraction = (DOUBLE)PhPerfInformation.CommittedPages / PhPerfInformation.CommitLimit;
+            PH_FORMAT format[5];
 
             PhInitFormatS(&format[0], L"Commit    ");
             PhInitFormatSize(&format[1], UInt32x32To64(PhPerfInformation.CommittedPages, PAGE_SIZE));
             PhInitFormatS(&format[2], L" (");
             PhInitFormatF(&format[3], commitFraction * 100, 2);
             PhInitFormatS(&format[4], L"%)");
+
             ListSection->Section->Parameters->SetSectionText(ListSection->Section,
-                PH_AUTO(PhFormat(format, 5, 96)));
+                PH_AUTO(PhFormat(format, RTL_NUMBER_OF(format), 96)));
         }
         break;
     case MiListSectionSortProcessList:
         {
             PPH_MINIINFO_LIST_SECTION_SORT_LIST sortList = Parameter1;
+
+            if (!sortList)
+                break;
 
             qsort(sortList->List->Items, sortList->List->Count,
                 sizeof(PPH_PROCESS_NODE), PhMipCommitListSectionProcessCompareFunction);
@@ -2045,9 +2107,15 @@ BOOLEAN PhMipCommitListSectionCallback(
     case MiListSectionAssignSortData:
         {
             PPH_MINIINFO_LIST_SECTION_ASSIGN_SORT_DATA assignSortData = Parameter1;
-            PPH_LIST processes = assignSortData->ProcessGroup->Processes;
-            ULONG64 privateBytes = 0;
+            PPH_LIST processes;
+            ULONG64 privateBytes;
             ULONG i;
+
+            if (!assignSortData)
+                break;
+
+            processes = assignSortData->ProcessGroup->Processes;
+            privateBytes = 0;
 
             for (i = 0; i < processes->Count; i++)
                 privateBytes += ((PPH_PROCESS_ITEM)processes->Items[i])->VmCounters.PagefileUsage;
@@ -2059,6 +2127,9 @@ BOOLEAN PhMipCommitListSectionCallback(
         {
             PPH_MINIINFO_LIST_SECTION_SORT_LIST sortList = Parameter1;
 
+            if (!sortList)
+                break;
+
             qsort(sortList->List->Items, sortList->List->Count,
                 sizeof(PPH_MINIINFO_LIST_SECTION_SORT_DATA), PhMipCommitListSectionNodeCompareFunction);
         }
@@ -2066,10 +2137,16 @@ BOOLEAN PhMipCommitListSectionCallback(
     case MiListSectionGetUsageText:
         {
             PPH_MINIINFO_LIST_SECTION_GET_USAGE_TEXT getUsageText = Parameter1;
-            PPH_LIST processes = getUsageText->ProcessGroup->Processes;
-            ULONG64 privateBytes = *(PULONG64)getUsageText->SortData->UserData;
+            PPH_LIST processes;
+            ULONG64 privateBytes;
 
-            PhMoveReference(&getUsageText->Line1, PhFormatSize(privateBytes, -1));
+            if (!getUsageText)
+                break;
+
+            processes = getUsageText->ProcessGroup->Processes;
+            privateBytes = *(PULONG64)getUsageText->SortData->UserData;
+
+            PhMoveReference(&getUsageText->Line1, PhFormatSize(privateBytes, ULONG_MAX));
             PhMoveReference(&getUsageText->Line2, PhCreateString(L"Private bytes"));
             getUsageText->Line2Color = GetSysColor(COLOR_GRAYTEXT);
         }
@@ -2112,22 +2189,27 @@ BOOLEAN PhMipPhysicalListSectionCallback(
     {
     case MiListSectionTick:
         {
-            PH_FORMAT format[5];
             ULONG physicalUsage = PhSystemBasicInformation.NumberOfPhysicalPages - PhPerfInformation.AvailablePages;
             FLOAT physicalFraction = (FLOAT)physicalUsage / PhSystemBasicInformation.NumberOfPhysicalPages;
+            FLOAT physicalPercent = physicalFraction * 100;
+            PH_FORMAT format[5];
 
             PhInitFormatS(&format[0], L"Physical    ");
             PhInitFormatSize(&format[1], UInt32x32To64(physicalUsage, PAGE_SIZE));
             PhInitFormatS(&format[2], L" (");
-            PhInitFormatF(&format[3], physicalFraction * 100, 2);
+            PhInitFormatF(&format[3], physicalPercent, 2);
             PhInitFormatS(&format[4], L"%)");
+
             ListSection->Section->Parameters->SetSectionText(ListSection->Section,
-                PH_AUTO(PhFormat(format, 5, 96)));
+                PH_AUTO(PhFormat(format, RTL_NUMBER_OF(format), 96)));
         }
         break;
     case MiListSectionSortProcessList:
         {
             PPH_MINIINFO_LIST_SECTION_SORT_LIST sortList = Parameter1;
+
+            if (!sortList)
+                break;
 
             qsort(sortList->List->Items, sortList->List->Count,
                 sizeof(PPH_PROCESS_NODE), PhMipPhysicalListSectionProcessCompareFunction);
@@ -2136,9 +2218,15 @@ BOOLEAN PhMipPhysicalListSectionCallback(
     case MiListSectionAssignSortData:
         {
             PPH_MINIINFO_LIST_SECTION_ASSIGN_SORT_DATA assignSortData = Parameter1;
-            PPH_LIST processes = assignSortData->ProcessGroup->Processes;
-            ULONG64 workingSet = 0;
+            PPH_LIST processes;
+            ULONG64 workingSet;
             ULONG i;
+
+            if (!assignSortData)
+                break;
+
+            processes = assignSortData->ProcessGroup->Processes;
+            workingSet = 0;
 
             for (i = 0; i < processes->Count; i++)
                 workingSet += ((PPH_PROCESS_ITEM)processes->Items[i])->VmCounters.WorkingSetSize;
@@ -2150,6 +2238,9 @@ BOOLEAN PhMipPhysicalListSectionCallback(
         {
             PPH_MINIINFO_LIST_SECTION_SORT_LIST sortList = Parameter1;
 
+            if (!sortList)
+                break;
+
             qsort(sortList->List->Items, sortList->List->Count,
                 sizeof(PPH_MINIINFO_LIST_SECTION_SORT_DATA), PhMipPhysicalListSectionNodeCompareFunction);
         }
@@ -2157,10 +2248,16 @@ BOOLEAN PhMipPhysicalListSectionCallback(
     case MiListSectionGetUsageText:
         {
             PPH_MINIINFO_LIST_SECTION_GET_USAGE_TEXT getUsageText = Parameter1;
-            PPH_LIST processes = getUsageText->ProcessGroup->Processes;
-            ULONG64 privateBytes = *(PULONG64)getUsageText->SortData->UserData;
+            PPH_LIST processes;
+            ULONG64 privateBytes;
 
-            PhMoveReference(&getUsageText->Line1, PhFormatSize(privateBytes, -1));
+            if (!getUsageText)
+                break;
+
+            processes = getUsageText->ProcessGroup->Processes;
+            privateBytes = *(PULONG64)getUsageText->SortData->UserData;
+
+            PhMoveReference(&getUsageText->Line1, PhFormatSize(privateBytes, ULONG_MAX));
             PhMoveReference(&getUsageText->Line2, PhCreateString(L"Working set"));
             getUsageText->Line2Color = GetSysColor(COLOR_GRAYTEXT);
         }
@@ -2206,24 +2303,22 @@ BOOLEAN PhMipIoListSectionCallback(
             PH_FORMAT format[6];
 
             PhInitFormatS(&format[0], L"I/O    R: ");
-            PhInitFormatSize(&format[1], PhIoReadDelta.Delta);
-            format[1].Type |= FormatUsePrecision;
-            format[1].Precision = 0;
+            PhInitFormatSizeWithPrecision(&format[1], PhIoReadDelta.Delta, 0);
             PhInitFormatS(&format[2], L"  W: ");
-            PhInitFormatSize(&format[3], PhIoWriteDelta.Delta);
-            format[3].Type |= FormatUsePrecision;
-            format[3].Precision = 0;
+            PhInitFormatSizeWithPrecision(&format[3], PhIoWriteDelta.Delta, 0);
             PhInitFormatS(&format[4], L"  O: ");
-            PhInitFormatSize(&format[5], PhIoOtherDelta.Delta);
-            format[5].Type |= FormatUsePrecision;
-            format[5].Precision = 0;
+            PhInitFormatSizeWithPrecision(&format[5], PhIoOtherDelta.Delta, 0);
+
             ListSection->Section->Parameters->SetSectionText(ListSection->Section,
-                PH_AUTO(PhFormat(format, 6, 80)));
+                PH_AUTO(PhFormat(format, RTL_NUMBER_OF(format), 80)));
         }
         break;
     case MiListSectionSortProcessList:
         {
             PPH_MINIINFO_LIST_SECTION_SORT_LIST sortList = Parameter1;
+
+            if (!sortList)
+                break;
 
             qsort(sortList->List->Items, sortList->List->Count,
                 sizeof(PPH_PROCESS_NODE), PhMipIoListSectionProcessCompareFunction);
@@ -2232,10 +2327,17 @@ BOOLEAN PhMipIoListSectionCallback(
     case MiListSectionAssignSortData:
         {
             PPH_MINIINFO_LIST_SECTION_ASSIGN_SORT_DATA assignSortData = Parameter1;
-            PPH_LIST processes = assignSortData->ProcessGroup->Processes;
-            ULONG64 ioReadOtherDelta = 0;
-            ULONG64 ioWriteDelta = 0;
+            PPH_LIST processes;
+            ULONG64 ioReadOtherDelta;
+            ULONG64 ioWriteDelta;
             ULONG i;
+
+            if (!assignSortData)
+                break;
+
+            processes = assignSortData->ProcessGroup->Processes;
+            ioReadOtherDelta = 0;
+            ioWriteDelta = 0;
 
             for (i = 0; i < processes->Count; i++)
             {
@@ -2253,6 +2355,9 @@ BOOLEAN PhMipIoListSectionCallback(
         {
             PPH_MINIINFO_LIST_SECTION_SORT_LIST sortList = Parameter1;
 
+            if (!sortList)
+                break;
+
             qsort(sortList->List->Items, sortList->List->Count,
                 sizeof(PPH_MINIINFO_LIST_SECTION_SORT_DATA), PhMipIoListSectionNodeCompareFunction);
         }
@@ -2260,10 +2365,17 @@ BOOLEAN PhMipIoListSectionCallback(
     case MiListSectionGetUsageText:
         {
             PPH_MINIINFO_LIST_SECTION_GET_USAGE_TEXT getUsageText = Parameter1;
-            PPH_LIST processes = getUsageText->ProcessGroup->Processes;
-            ULONG64 ioReadOtherDelta = getUsageText->SortData->UserData[0];
-            ULONG64 ioWriteDelta = getUsageText->SortData->UserData[1];
+            PPH_LIST processes;
+            ULONG64 ioReadOtherDelta;
+            ULONG64 ioWriteDelta;
             PH_FORMAT format[1];
+
+            if (!getUsageText)
+                break;
+
+            processes = getUsageText->ProcessGroup->Processes;
+            ioReadOtherDelta = getUsageText->SortData->UserData[0];
+            ioWriteDelta = getUsageText->SortData->UserData[1];
 
             PhInitFormatSize(&format[0], ioReadOtherDelta + ioWriteDelta);
             PhMoveReference(&getUsageText->Line1, PhFormat(format, 1, 16));

@@ -3,7 +3,7 @@
  *   Process properties: Memory page
  *
  * Copyright (C) 2009-2016 wj32
- * Copyright (C) 2017-2018 dmex
+ * Copyright (C) 2017-2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -153,9 +153,14 @@ VOID PhShowMemoryContextMenu(
         PH_PLUGIN_MENU_INFORMATION menuInfo;
 
         menu = PhCreateEMenu();
-        PhLoadResourceEMenuItem(menu, PhInstanceHandle, MAKEINTRESOURCE(IDR_MEMORY), 0);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MEMORY_READWRITEMEMORY, L"&Read/Write memory", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MEMORY_SAVE, L"&Save...", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MEMORY_CHANGEPROTECTION, L"Change &protection...", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MEMORY_FREE, L"&Free", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MEMORY_DECOMMIT, L"&Decommit", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MEMORY_COPY, L"&Copy\bCtrl+C", NULL, NULL), ULONG_MAX);
         PhSetFlagsEMenuItem(menu, ID_MEMORY_READWRITEMEMORY, PH_EMENU_DEFAULT, PH_EMENU_DEFAULT);
-
         PhpInitializeMemoryMenu(menu, ProcessItem->ProcessId, memoryNodes, numberOfMemoryNodes);
         PhInsertCopyCellEMenuItem(menu, ID_MEMORY_COPY, Context->ListContext.TreeNewHandle, ContextMenu->Column);
 
@@ -209,7 +214,7 @@ static BOOLEAN PhpWordMatchHandleStringRef(
 
     while (remainingPart.Length)
     {
-        PhSplitStringRefAtChar(&remainingPart, '|', &part, &remainingPart);
+        PhSplitStringRefAtChar(&remainingPart, L'|', &part, &remainingPart);
 
         if (part.Length)
         {
@@ -363,18 +368,14 @@ INT_PTR CALLBACK PhpProcessMemoryDlgProc(
     _In_ LPARAM lParam
     )
 {
+    PPH_MEMORY_CONTEXT memoryContext;
     LPPROPSHEETPAGE propSheetPage;
     PPH_PROCESS_PROPPAGECONTEXT propPageContext;
     PPH_PROCESS_ITEM processItem;
-    PPH_MEMORY_CONTEXT memoryContext;
-    HWND tnHandle;
 
     if (PhPropPageDlgProcHeader(hwndDlg, uMsg, lParam, &propSheetPage, &propPageContext, &processItem))
     {
         memoryContext = (PPH_MEMORY_CONTEXT)propPageContext->Context;
-
-        if (memoryContext)
-            tnHandle = memoryContext->ListContext.TreeNewHandle;
     }
     else
     {
@@ -388,19 +389,20 @@ INT_PTR CALLBACK PhpProcessMemoryDlgProc(
             memoryContext = propPageContext->Context = PhCreateMemoryContext();
             memoryContext->WindowHandle = hwndDlg;
             memoryContext->ProcessId = processItem->ProcessId;
+            memoryContext->TreeNewHandle = GetDlgItem(hwndDlg, IDC_LIST);
             memoryContext->SearchboxHandle = GetDlgItem(hwndDlg, IDC_SEARCH);
-
-            PhCreateSearchControl(hwndDlg, memoryContext->SearchboxHandle, L"Search Memory (Ctrl+K)");
-
-            // Initialize the list.
-            tnHandle = GetDlgItem(hwndDlg, IDC_LIST);
-            PhInitializeMemoryList(hwndDlg, tnHandle, &memoryContext->ListContext);
-            TreeNew_SetEmptyText(tnHandle, &PhpLoadingText, 0);
-            memoryContext->LastRunStatus = -1;
+            memoryContext->LastRunStatus = ULONG_MAX;
             memoryContext->ErrorMessage = NULL;
             memoryContext->SearchboxText = PhReferenceEmptyString();
+
+            // Initialize the list.
+            PhInitializeMemoryList(hwndDlg, memoryContext->TreeNewHandle, &memoryContext->ListContext);
+            TreeNew_SetEmptyText(memoryContext->TreeNewHandle, &PhpLoadingText, 0);
+
             memoryContext->AllocationFilterEntry = PhAddTreeNewFilter(&memoryContext->ListContext.AllocationTreeFilterSupport, PhpMemoryTreeFilterCallback, memoryContext);
             memoryContext->FilterEntry = PhAddTreeNewFilter(&memoryContext->ListContext.TreeFilterSupport, PhpMemoryTreeFilterCallback, memoryContext);
+
+            PhCreateSearchControl(hwndDlg, memoryContext->SearchboxHandle, L"Search Memory (Ctrl+K)");
 
             PhEmCallObjectOperation(EmMemoryContextType, memoryContext, EmObjectCreate);
 
@@ -408,7 +410,7 @@ INT_PTR CALLBACK PhpProcessMemoryDlgProc(
             {
                 PH_PLUGIN_TREENEW_INFORMATION treeNewInfo;
 
-                treeNewInfo.TreeNewHandle = tnHandle;
+                treeNewInfo.TreeNewHandle = memoryContext->TreeNewHandle;
                 treeNewInfo.CmData = &memoryContext->ListContext.Cm;
                 treeNewInfo.SystemContext = memoryContext;
                 PhInvokeCallback(PhGetGeneralCallback(GeneralCallbackMemoryTreeNewInitializing), &treeNewInfo);
@@ -433,7 +435,7 @@ INT_PTR CALLBACK PhpProcessMemoryDlgProc(
             {
                 PH_PLUGIN_TREENEW_INFORMATION treeNewInfo;
 
-                treeNewInfo.TreeNewHandle = tnHandle;
+                treeNewInfo.TreeNewHandle = memoryContext->TreeNewHandle;
                 treeNewInfo.CmData = &memoryContext->ListContext.Cm;
                 PhInvokeCallback(PhGetGeneralCallback(GeneralCallbackMemoryTreeNewUninitializing), &treeNewInfo);
             }
@@ -567,34 +569,35 @@ INT_PTR CALLBACK PhpProcessMemoryDlgProc(
                                 0
                                 )))
                             {
-                                buffer = PhAllocatePage(PAGE_SIZE, NULL);
-
-                                // Go through each selected memory item and append the region contents
-                                // to the file.
-                                for (i = 0; i < numberOfMemoryNodes; i++)
+                                if (buffer = PhAllocatePage(PAGE_SIZE, NULL))
                                 {
-                                    PPH_MEMORY_NODE memoryNode = memoryNodes[i];
-                                    PPH_MEMORY_ITEM memoryItem = memoryNode->MemoryItem;
-
-                                    if (!memoryNode->IsAllocationBase && !(memoryItem->State & MEM_COMMIT))
-                                        continue;
-
-                                    for (offset = 0; offset < memoryItem->RegionSize; offset += PAGE_SIZE)
+                                    // Go through each selected memory item and append the region contents
+                                    // to the file.
+                                    for (i = 0; i < numberOfMemoryNodes; i++)
                                     {
-                                        if (NT_SUCCESS(NtReadVirtualMemory(
-                                            processHandle,
-                                            PTR_ADD_OFFSET(memoryItem->BaseAddress, offset),
-                                            buffer,
-                                            PAGE_SIZE,
-                                            NULL
-                                            )))
+                                        PPH_MEMORY_NODE memoryNode = memoryNodes[i];
+                                        PPH_MEMORY_ITEM memoryItem = memoryNode->MemoryItem;
+
+                                        if (!memoryNode->IsAllocationBase && !(memoryItem->State & MEM_COMMIT))
+                                            continue;
+
+                                        for (offset = 0; offset < memoryItem->RegionSize; offset += PAGE_SIZE)
                                         {
-                                            PhWriteFileStream(fileStream, buffer, PAGE_SIZE);
+                                            if (NT_SUCCESS(NtReadVirtualMemory(
+                                                processHandle,
+                                                PTR_ADD_OFFSET(memoryItem->BaseAddress, offset),
+                                                buffer,
+                                                PAGE_SIZE,
+                                                NULL
+                                                )))
+                                            {
+                                                PhWriteFileStream(fileStream, buffer, PAGE_SIZE);
+                                            }
                                         }
                                     }
-                                }
 
-                                PhFreePage(buffer);
+                                    PhFreePage(buffer);
+                                }
 
                                 PhDereferenceObject(fileStream);
                             }
@@ -654,8 +657,8 @@ INT_PTR CALLBACK PhpProcessMemoryDlgProc(
                 {
                     PPH_STRING text;
 
-                    text = PhGetTreeNewText(tnHandle, 0);
-                    PhSetClipboardString(tnHandle, &text->sr);
+                    text = PhGetTreeNewText(memoryContext->TreeNewHandle, 0);
+                    PhSetClipboardString(memoryContext->TreeNewHandle, &text->sr);
                     PhDereferenceObject(text);
                 }
                 break;
@@ -819,6 +822,18 @@ INT_PTR CALLBACK PhpProcessMemoryDlgProc(
             case PSN_QUERYINITIALFOCUS:
                 SetWindowLongPtr(hwndDlg, DWLP_MSGRESULT, (LPARAM)GetDlgItem(hwndDlg, IDC_LIST));
                 return TRUE;
+            }
+        }
+        break;
+    case WM_KEYDOWN:
+        {
+            if (LOWORD(wParam) == 'K')
+            {
+                if (GetKeyState(VK_CONTROL) < 0)
+                {
+                    SetFocus(memoryContext->SearchboxHandle);
+                    return TRUE;
+                }
             }
         }
         break;

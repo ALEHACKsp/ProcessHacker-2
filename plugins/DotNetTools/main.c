@@ -62,6 +62,9 @@ VOID NTAPI MenuItemCallback(
 {
     PPH_PLUGIN_MENU_ITEM menuItem = Parameter;
 
+    if (!menuItem)
+        return;
+
     switch (menuItem->Id)
     {
     default:
@@ -75,7 +78,8 @@ VOID NTAPI TreeNewMessageCallback(
     _In_opt_ PVOID Context
     )
 {
-    DispatchTreeNewMessage(Parameter);
+    if (Parameter)
+        DispatchTreeNewMessage(Parameter);
 }
 
 VOID NTAPI PhSvcRequestCallback(
@@ -83,7 +87,8 @@ VOID NTAPI PhSvcRequestCallback(
     _In_opt_ PVOID Context
     )
 {
-    DispatchPhSvcRequest(Parameter);
+    if (Parameter)
+        DispatchPhSvcRequest(Parameter);
 }
 
 VOID NTAPI ThreadTreeNewInitializingCallback(
@@ -91,7 +96,8 @@ VOID NTAPI ThreadTreeNewInitializingCallback(
     _In_opt_ PVOID Context
     )
 {
-    ThreadTreeNewInitializing(Parameter);
+    if (Parameter)
+        ThreadTreeNewInitializing(Parameter);
 }
 
 VOID NTAPI ThreadTreeNewUninitializingCallback(
@@ -99,7 +105,8 @@ VOID NTAPI ThreadTreeNewUninitializingCallback(
     _In_opt_ PVOID Context
     )
 {
-    ThreadTreeNewUninitializing(Parameter);
+    if (Parameter)
+        ThreadTreeNewUninitializing(Parameter);
 }
 
 VOID NTAPI ProcessPropertiesInitializingCallback(
@@ -111,14 +118,28 @@ VOID NTAPI ProcessPropertiesInitializingCallback(
     BOOLEAN isDotNet = FALSE;
     ULONG flags = 0;
 
-    if (NT_SUCCESS(PhGetProcessIsDotNetEx(propContext->ProcessItem->ProcessId, NULL, 0, &isDotNet, &flags)))
+    if (!propContext)
+        return;
+
+    if (NT_SUCCESS(PhGetProcessIsDotNetEx(
+        propContext->ProcessItem->ProcessId,
+        NULL,
+        propContext->ProcessItem->IsImmersive ? 0 : PH_CLR_USE_SECTION_CHECK,
+        &isDotNet,
+        &flags
+        )))
     {
         if (isDotNet)
         {
             AddAsmPageToPropContext(propContext);
             AddPerfPageToPropContext(propContext);
         }
-        else if (flags & PH_CLR_JIT_PRESENT) // CoreCLR support. (dmex)
+        else if (flags & PH_CLR_JIT_PRESENT)
+        {
+            isDotNet = TRUE;
+            AddAsmPageToPropContext(propContext);
+        }
+        else if (flags & PH_CLR_CORE_3_0_ABOVE)
         {
             isDotNet = TRUE;
             AddAsmPageToPropContext(propContext);
@@ -166,6 +187,9 @@ VOID NTAPI ThreadStackControlCallback(
     _In_opt_ PVOID Context
     )
 {
+    if (!Parameter)
+        return;
+
     ProcessThreadStackControl(Parameter);
 }
 

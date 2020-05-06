@@ -3,6 +3,7 @@
  *   Process properties
  *
  * Copyright (C) 2009-2016 wj32
+ * Copyright (C) 2016-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -37,7 +38,7 @@ PH_STRINGREF PhpLoadingText = PH_STRINGREF_INIT(L"Loading...");
 static RECT MinimumSize = { -1, -1, -1, -1 };
 
 PPH_PROCESS_PROPCONTEXT PhCreateProcessPropContext(
-    _In_ HWND ParentWindowHandle,
+    _In_opt_ HWND ParentWindowHandle,
     _In_ PPH_PROCESS_ITEM ProcessItem
     )
 {
@@ -57,11 +58,14 @@ PPH_PROCESS_PROPCONTEXT PhCreateProcessPropContext(
 
     if (!PH_IS_FAKE_PROCESS_ID(ProcessItem->ProcessId))
     {
-        propContext->Title = PhFormatString(
-            L"%s (%u)",
-            ProcessItem->ProcessName->Buffer,
-            HandleToUlong(ProcessItem->ProcessId)
-            );
+        PH_FORMAT format[4];
+
+        PhInitFormatSR(&format[0], ProcessItem->ProcessName->sr);
+        PhInitFormatS(&format[1], L" (");
+        PhInitFormatU(&format[2], HandleToUlong(ProcessItem->ProcessId));
+        PhInitFormatC(&format[3], L')');
+
+        propContext->Title = PhFormat(format, RTL_NUMBER_OF(format), 64);
     }
     else
     {
@@ -80,7 +84,7 @@ PPH_PROCESS_PROPCONTEXT PhCreateProcessPropContext(
     propSheetHeader.hInstance = PhInstanceHandle;
     propSheetHeader.hwndParent = ParentWindowHandle;
     propSheetHeader.hIcon = ProcessItem->SmallIcon;
-    propSheetHeader.pszCaption = propContext->Title->Buffer;
+    propSheetHeader.pszCaption = PhGetString(propContext->Title);
     propSheetHeader.pfnCallback = PhpPropSheetProc;
 
     propSheetHeader.nPages = 0;
@@ -149,7 +153,7 @@ INT CALLBACK PhpPropSheetProc(
         {
             if (lParam)
             {
-                if (((DLGTEMPLATEEX *)lParam)->signature == 0xffff)
+                if (((DLGTEMPLATEEX *)lParam)->signature == USHRT_MAX)
                 {
                     ((DLGTEMPLATEEX *)lParam)->style |= PROPSHEET_ADD_STYLE;
                 }
@@ -259,6 +263,23 @@ LRESULT CALLBACK PhpPropSheetWndProc(
             PhFree(propSheetContext);
         }
         break;
+    case WM_SYSCOMMAND:
+        {
+            // Note: Clicking the X on the taskbar window thumbnail preview doens't close modeless property sheets
+            // when there are more than 1 window and the window doesn't have focus... The MFC, ATL and WTL libraries
+            // check if the propsheet is modeless and SendMessage WM_CLOSE and so we'll implement the same solution. (dmex)
+            switch (wParam & 0xFFF0)
+            {
+            case SC_CLOSE:
+                {
+                    PostMessage(hwnd, WM_CLOSE, 0, 0);
+                    //SetWindowLongPtr(hwnd, DWLP_MSGRESULT, TRUE);
+                    //return TRUE;
+                }
+                break;
+            }
+        }
+        break;
     case WM_COMMAND:
         {
             switch (GET_WM_COMMAND_ID(wParam, lParam))
@@ -282,6 +303,21 @@ LRESULT CALLBACK PhpPropSheetWndProc(
     case WM_SIZING:
         {
             PhResizingMinimumSize((PRECT)lParam, wParam, MinimumSize.right, MinimumSize.bottom);
+        }
+        break;
+    case WM_KEYDOWN: // forward key messages (dmex)
+    //case WM_KEYUP:
+        {
+            HWND pageWindowHandle;
+
+            if (pageWindowHandle = PropSheet_GetCurrentPageHwnd(hwnd))
+            {
+                // TODO: Add hotkey plugin support using hashlist register/callback for window handle. (dmex)
+                if (SendMessage(pageWindowHandle, uMsg, wParam, lParam))
+                {
+                    return TRUE;
+                }
+            }
         }
         break;
     }
@@ -367,11 +403,9 @@ BOOLEAN PhAddProcessPropPage(
     // which would have added a reference.
     PhDereferenceObject(PropPageContext);
 
-    PropPageContext->PropContext = PropContext;
-    PhReferenceObject(PropContext);
+    PhSetReference(&PropPageContext->PropContext, PropContext);
 
-    PropContext->PropSheetPages[PropContext->PropSheetHeader.nPages] =
-        propSheetPageHandle;
+    PropContext->PropSheetPages[PropContext->PropSheetHeader.nPages] = propSheetPageHandle;
     PropContext->PropSheetHeader.nPages++;
 
     return TRUE;
@@ -385,8 +419,7 @@ BOOLEAN PhAddProcessPropPage2(
     if (PropContext->PropSheetHeader.nPages == PH_PROCESS_PROPCONTEXT_MAXPAGES)
         return FALSE;
 
-    PropContext->PropSheetPages[PropContext->PropSheetHeader.nPages] =
-        PropSheetPageHandle;
+    PropContext->PropSheetPages[PropContext->PropSheetHeader.nPages] = PropSheetPageHandle;
     PropContext->PropSheetHeader.nPages++;
 
     return TRUE;
@@ -410,9 +443,7 @@ PPH_PROCESS_PROPPAGECONTEXT PhCreateProcessPropPageContextEx(
 {
     PPH_PROCESS_PROPPAGECONTEXT propPageContext;
 
-    propPageContext = PhCreateObject(sizeof(PH_PROCESS_PROPPAGECONTEXT), PhpProcessPropPageContextType);
-    memset(propPageContext, 0, sizeof(PH_PROCESS_PROPPAGECONTEXT));
-
+    propPageContext = PhCreateObjectZero(sizeof(PH_PROCESS_PROPPAGECONTEXT), PhpProcessPropPageContextType);
     propPageContext->PropSheetPage.dwSize = sizeof(PROPSHEETPAGE);
     propPageContext->PropSheetPage.dwFlags = PSP_USECALLBACK;
     propPageContext->PropSheetPage.hInstance = InstanceHandle;
@@ -455,6 +486,7 @@ INT CALLBACK PhpStandardPropPageProc(
     return 1;
 }
 
+_Success_(return)
 BOOLEAN PhPropPageDlgProcHeader(
     _In_ HWND hwndDlg,
     _In_ UINT uMsg,
@@ -624,7 +656,7 @@ NTSTATUS PhpProcessPropertiesThreadStart(
     // Token
     PhAddProcessPropPage2(
         PropContext,
-        PhCreateTokenPage(PhpOpenProcessTokenForPage, (PVOID)PropContext->ProcessItem->ProcessId, PhpProcessTokenHookProc)
+        PhCreateTokenPage(PhpOpenProcessTokenForPage, PropContext->ProcessItem->ProcessId, (PVOID)PropContext->ProcessItem->ProcessId, PhpProcessTokenHookProc)
         );
 
     // Modules

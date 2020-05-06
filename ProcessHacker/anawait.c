@@ -97,9 +97,9 @@ PPH_STRING PhpaGetAlpcInformation(
     );
 
 static PH_INITONCE ServiceNumbersInitOnce = PH_INITONCE_INIT;
-static USHORT NumberForWfso = -1;
-static USHORT NumberForWfmo = -1;
-static USHORT NumberForRf = -1;
+static USHORT NumberForWfso = USHRT_MAX;
+static USHORT NumberForWfmo = USHRT_MAX;
+static USHORT NumberForRf = USHRT_MAX;
 
 VOID PhUiAnalyzeWaitThread(
     _In_ HWND hWnd,
@@ -274,6 +274,9 @@ static BOOLEAN NTAPI PhpWalkThreadStackAnalyzeCallback(
 {
     PANALYZE_WAIT_CONTEXT context = (PANALYZE_WAIT_CONTEXT)Context;
     PPH_STRING name;
+
+    if (!context)
+        return TRUE;
 
     name = PhGetSymbolFromAddress(
         context->SymbolProvider,
@@ -688,7 +691,8 @@ static BOOLEAN PhpWaitUntilThreadIsWaiting(
     return isWaiting;
 }
 
-static VOID PhpGetThreadLastSystemCallNumber(
+_Success_(return)
+static BOOLEAN PhpGetThreadLastSystemCallNumber(
     _In_ HANDLE ThreadHandle,
     _Out_ PUSHORT LastSystemCallNumber
     )
@@ -698,7 +702,10 @@ static VOID PhpGetThreadLastSystemCallNumber(
     if (NT_SUCCESS(PhGetThreadLastSystemCall(ThreadHandle, &lastSystemCall)))
     {
         *LastSystemCallNumber = lastSystemCall.SystemCallNumber;
+        return TRUE;
     }
+
+    return FALSE;
 }
 
 static NTSTATUS PhpWfsoThreadStart(
@@ -769,7 +776,7 @@ static VOID PhpInitializeServiceNumbers(
 
         if (NT_SUCCESS(status))
         {
-            if (threadHandle = PhCreateThread(0, PhpWfsoThreadStart, eventHandle))
+            if (NT_SUCCESS(PhCreateThreadEx(&threadHandle, PhpWfsoThreadStart, eventHandle)))
             {
                 if (PhpWaitUntilThreadIsWaiting(threadHandle))
                 {
@@ -790,7 +797,7 @@ static VOID PhpInitializeServiceNumbers(
 
         if (NT_SUCCESS(status))
         {
-            if (threadHandle = PhCreateThread(0, PhpWfmoThreadStart, eventHandle))
+            if (NT_SUCCESS(PhCreateThreadEx(&threadHandle, PhpWfmoThreadStart, eventHandle)))
             {
                 if (PhpWaitUntilThreadIsWaiting(threadHandle))
                 {
@@ -810,7 +817,7 @@ static VOID PhpInitializeServiceNumbers(
 
         if (NT_SUCCESS(status))
         {
-            if (threadHandle = PhCreateThread(0, PhpRfThreadStart, pipeReadHandle))
+            if (NT_SUCCESS(PhCreateThreadEx(&threadHandle, PhpRfThreadStart, pipeReadHandle)))
             {
                 ULONG data = 0;
                 IO_STATUS_BLOCK isb;
@@ -844,20 +851,18 @@ static PPH_STRING PhpaGetHandleString(
     PhGetHandleInformation(
         ProcessHandle,
         Handle,
-        -1,
+        ULONG_MAX,
         NULL,
         &typeName,
         NULL,
         &name
         );
-    PH_AUTO(typeName);
-    PH_AUTO(name);
 
     if (typeName && name)
     {
         result = PhaFormatString(
-            L"Handle 0x%Ix (%s): %s",
-            Handle,
+            L"Handle 0x%lx (%s): %s",
+            HandleToUlong(Handle),
             typeName->Buffer,
             !PhIsNullOrEmptyString(name) ? name->Buffer : L"(unnamed object)"
             );
@@ -865,10 +870,15 @@ static PPH_STRING PhpaGetHandleString(
     else
     {
         result = PhaFormatString(
-            L"Handle 0x%Ix: (error querying handle)",
-            Handle
+            L"Handle 0x%lx: (error querying handle)",
+            HandleToUlong(Handle)
             );
     }
+
+    if (typeName)
+        PhDereferenceObject(typeName);
+    if (name)
+        PhDereferenceObject(name);
 
     return result;
 }
@@ -999,7 +1009,7 @@ static PPH_STRING PhpaGetSendMessageReceiver(
     return PhaFormatString(L"Window 0x%Ix (%s): %s \"%s\"", windowHandle, clientIdName->Buffer, windowClass, PhGetStringOrEmpty(windowText));
 }
 
-static PPH_STRING PhpaGetAlpcInformation(
+PPH_STRING PhpaGetAlpcInformation(
     _In_ HANDLE ThreadId
     )
 {

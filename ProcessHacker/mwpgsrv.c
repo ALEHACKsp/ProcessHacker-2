@@ -91,7 +91,10 @@ BOOLEAN PhMwpServicesPageCallback(
         break;
     case MainTabPageCreateWindow:
         {
-            *(HWND *)Parameter1 = PhMwpServiceTreeNewHandle;
+            if (Parameter1)
+            {
+                *(HWND*)Parameter1 = PhMwpServiceTreeNewHandle;
+            }
         }
         return TRUE;
     case MainTabPageSelected:
@@ -105,9 +108,15 @@ BOOLEAN PhMwpServicesPageCallback(
     case MainTabPageInitializeSectionMenuItems:
         {
             PPH_MAIN_TAB_PAGE_MENU_INFORMATION menuInfo = Parameter1;
-            PPH_EMENU menu = menuInfo->Menu;
-            ULONG startIndex = menuInfo->StartIndex;
+            PPH_EMENU menu;
+            ULONG startIndex;
             PPH_EMENU_ITEM menuItem;
+
+            if (!menuInfo)
+                break;
+
+            menu = menuInfo->Menu;
+            startIndex = menuInfo->StartIndex;
 
             PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_VIEW_HIDEDRIVERSERVICES, L"&Hide driver services", NULL, NULL), startIndex);
 
@@ -131,14 +140,15 @@ BOOLEAN PhMwpServicesPageCallback(
         {
             PPH_MAIN_TAB_PAGE_EXPORT_CONTENT exportContent = Parameter1;
 
-            PhWriteServiceList(exportContent->FileStream, exportContent->Mode);
+            if (exportContent)
+                PhWriteServiceList(exportContent->FileStream, exportContent->Mode);
         }
         return TRUE;
     case MainTabPageFontChanged:
         {
             HFONT font = (HFONT)Parameter1;
 
-            SendMessage(PhMwpServiceTreeNewHandle, WM_SETFONT, (WPARAM)font, TRUE);
+            SetWindowFont(PhMwpServiceTreeNewHandle, font, TRUE);
         }
         break;
     case MainTabPageUpdateAutomaticallyChanged:
@@ -289,9 +299,20 @@ VOID PhShowServiceContextMenu(
         PPH_EMENU_ITEM item;
 
         menu = PhCreateEMenu();
-        PhLoadResourceEMenuItem(menu, PhInstanceHandle, MAKEINTRESOURCE(IDR_SERVICE), 0);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_START, L"&Start", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_CONTINUE, L"C&ontinue", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_PAUSE, L"&Pause", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_STOP, L"S&top", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_DELETE, L"&Delete\bDel", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_GOTOPROCESS, L"&Go to process", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_OPENKEY, L"Open &key", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_OPENFILELOCATION, L"Open &file location\bCtrl+Enter", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_PROPERTIES, L"P&roperties\bEnter", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SERVICE_COPY, L"&Copy\bCtrl+C", NULL, NULL), ULONG_MAX);
         PhSetFlagsEMenuItem(menu, ID_SERVICE_PROPERTIES, PH_EMENU_DEFAULT, PH_EMENU_DEFAULT);
-
         PhMwpInitializeServiceMenu(menu, services, numberOfServices);
         PhInsertCopyCellEMenuItem(menu, ID_SERVICE_COPY, PhMwpServiceTreeNewHandle, ContextMenu->Column);
 
@@ -339,6 +360,9 @@ VOID NTAPI PhMwpServiceAddedHandler(
 {
     PPH_SERVICE_ITEM serviceItem = (PPH_SERVICE_ITEM)Parameter;
 
+    if (!serviceItem)
+        return;
+
     PhReferenceObject(serviceItem);
     PhPushProviderEventQueue(&PhMwpServiceEventQueue, ProviderAddedEvent, Parameter, PhGetRunIdProvider(&PhMwpServiceProviderRegistration));
 }
@@ -350,6 +374,9 @@ VOID NTAPI PhMwpServiceModifiedHandler(
 {
     PPH_SERVICE_MODIFIED_DATA serviceModifiedData = (PPH_SERVICE_MODIFIED_DATA)Parameter;
     PPH_SERVICE_MODIFIED_DATA copy;
+
+    if (!serviceModifiedData)
+        return;
 
     copy = PhAllocateCopy(serviceModifiedData, sizeof(PH_SERVICE_MODIFIED_DATA));
 
@@ -371,7 +398,7 @@ VOID NTAPI PhMwpServicesUpdatedHandler(
     _In_opt_ PVOID Context
     )
 {
-    PostMessage(PhMainWndHandle, WM_PH_SERVICES_UPDATED, PhGetRunIdProvider(&PhMwpServiceProviderRegistration), 0);
+    ProcessHacker_Invoke(PhMainWndHandle, PhMwpOnServicesUpdated, PhGetRunIdProvider(&PhMwpServiceProviderRegistration));
 }
 
 VOID PhMwpOnServiceAdded(

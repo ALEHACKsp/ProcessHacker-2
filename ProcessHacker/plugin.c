@@ -3,7 +3,7 @@
  *   plugin support
  *
  * Copyright (C) 2010-2015 wj32
- * Copyright (C) 2017-2019 dmex
+ * Copyright (C) 2017-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -62,7 +62,6 @@ VOID PhpExecuteCallbackForAllPlugins(
 
 PH_AVL_TREE PhPluginsByName = PH_AVL_TREE_INIT(PhpPluginsCompareFunction);
 static PH_CALLBACK GeneralCallbacks[GeneralCallbackMaximum];
-static PPH_STRING PluginsDirectory;
 static ULONG NextPluginId = IDPLUGINS + 1;
 
 INT NTAPI PhpPluginsCompareFunction(
@@ -76,6 +75,7 @@ INT NTAPI PhpPluginsCompareFunction(
     return PhCompareStringRef(&plugin1->Name, &plugin2->Name, FALSE);
 }
 
+_Success_(return)
 BOOLEAN PhpLocateDisabledPlugin(
     _In_ PPH_STRING List,
     _In_ PPH_STRINGREF BaseName,
@@ -89,7 +89,7 @@ BOOLEAN PhpLocateDisabledPlugin(
 
     while (remainingPart.Length != 0)
     {
-        PhSplitStringRefAtChar(&remainingPart, '|', &namePart, &remainingPart);
+        PhSplitStringRefAtChar(&remainingPart, L'|', &namePart, &remainingPart);
 
         if (PhEqualStringRef(&namePart, BaseName, TRUE))
         {
@@ -140,7 +140,7 @@ VOID PhSetPluginDisabled(
             // We have other disabled plugins. Append a pipe character followed by the plugin name.
             newDisabled = PhCreateStringEx(NULL, disabled->Length + sizeof(WCHAR) + BaseName->Length);
             memcpy(newDisabled->Buffer, disabled->Buffer, disabled->Length);
-            newDisabled->Buffer[disabled->Length / sizeof(WCHAR)] = '|';
+            newDisabled->Buffer[disabled->Length / sizeof(WCHAR)] = L'|';
             memcpy(&newDisabled->Buffer[disabled->Length / sizeof(WCHAR) + 1], BaseName->Buffer, BaseName->Length);
             PhSetStringSetting2(L"DisabledPlugins", &newDisabled->sr);
             PhDereferenceObject(newDisabled);
@@ -182,6 +182,70 @@ VOID PhSetPluginDisabled(
     PhDereferenceObject(disabled);
 }
 
+PPH_STRING PhpGetPluginDirectoryPath(
+    VOID
+    )
+{
+    static PPH_STRING cachedPluginDirectory = NULL;
+    PPH_STRING pluginsDirectory;
+    SIZE_T returnLength;
+    WCHAR pluginsDirectoryName[MAX_PATH];
+    PH_FORMAT format[3];
+
+    if (pluginsDirectory = InterlockedCompareExchangePointer(
+        &cachedPluginDirectory,
+        NULL,
+        NULL
+        ))
+    {
+        return PhReferenceObject(pluginsDirectory);
+    }
+
+    pluginsDirectory = PhGetStringSetting(L"PluginsDirectory");
+
+    if (RtlDetermineDosPathNameType_U(pluginsDirectory->Buffer) == RtlPathTypeRelative)
+    {
+        PPH_STRING applicationDirectory;
+
+        if (applicationDirectory = PhGetApplicationDirectory())
+        {
+            PH_STRINGREF pluginsDirectoryNameSr;
+
+            // Not absolute. Make sure it is.
+            PhInitFormatSR(&format[0], applicationDirectory->sr);
+            PhInitFormatSR(&format[1], pluginsDirectory->sr);
+            PhInitFormatC(&format[2], OBJ_NAME_PATH_SEPARATOR);
+
+            if (PhFormatToBuffer(
+                format,
+                RTL_NUMBER_OF(format),
+                pluginsDirectoryName,
+                sizeof(pluginsDirectoryName),
+                &returnLength
+                ))
+            {
+                pluginsDirectoryNameSr.Buffer = pluginsDirectoryName;
+                pluginsDirectoryNameSr.Length = returnLength - sizeof(UNICODE_NULL);
+
+                PhMoveReference(&pluginsDirectory, PhCreateString2(&pluginsDirectoryNameSr));
+            }
+
+            PhDereferenceObject(applicationDirectory);
+        }
+    }
+
+    if (!InterlockedCompareExchangePointer(
+        &cachedPluginDirectory,
+        pluginsDirectory,
+        NULL
+        ))
+    {
+        PhReferenceObject(pluginsDirectory);
+    }
+
+    return pluginsDirectory;
+}
+
 static BOOLEAN EnumPluginsDirectoryCallback(
     _In_ PFILE_NAMES_INFORMATION Information,
     _In_opt_ PVOID Context
@@ -197,6 +261,7 @@ static BOOLEAN EnumPluginsDirectoryCallback(
     };
     BOOLEAN blocklistedPlugin = FALSE;
     PH_STRINGREF baseName;
+    PPH_STRING directoryName;
     PPH_STRING fileName;
 
     baseName.Buffer = Information->FileName;
@@ -215,7 +280,8 @@ static BOOLEAN EnumPluginsDirectoryCallback(
         }
     }
 
-    fileName = PhConcatStringRef2(&PluginsDirectory->sr, &baseName);
+    directoryName = PhpGetPluginDirectoryPath();
+    fileName = PhConcatStringRef2(&directoryName->sr, &baseName);
 
     if (blocklistedPlugin)
     {
@@ -242,11 +308,15 @@ static BOOLEAN EnumPluginsDirectoryCallback(
                 PhDereferenceObject(errorMessage);
             }
 
-            PhAddItemList(pluginLoadErrors, loadError);
+            if (pluginLoadErrors)
+            {
+                PhAddItemList(pluginLoadErrors, loadError);
+            }
         }
     }
 
     PhDereferenceObject(fileName);
+    PhDereferenceObject(directoryName);
 
     return TRUE;
 }
@@ -263,35 +333,14 @@ VOID PhLoadPlugins(
     PPH_STRING pluginsDirectory;
     PPH_LIST pluginLoadErrors;
 
+    if (!(pluginsDirectory = PhpGetPluginDirectoryPath()))
+        return;
+
     pluginLoadErrors = PhCreateList(1);
-    pluginsDirectory = PhGetStringSetting(L"PluginsDirectory");
-
-    if (RtlDetermineDosPathNameType_U(pluginsDirectory->Buffer) == RtlPathTypeRelative)
-    {
-        PPH_STRING applicationDirectory;
-
-        if (applicationDirectory = PhGetApplicationDirectory())
-        {
-           PhMoveReference(&pluginsDirectory, PhConcatStrings( // Not absolute. Make sure it is.
-                4,
-                applicationDirectory->Buffer,
-                L"\\",
-                pluginsDirectory->Buffer,
-                L"\\"
-                ));
-
-            PhDereferenceObject(applicationDirectory);
-        }
-    }
-
-    if (PhIsNullOrEmptyString(PluginsDirectory))
-    {
-        PhMoveReference(&PluginsDirectory, pluginsDirectory);
-    }
 
     if (NT_SUCCESS(PhCreateFileWin32(
         &pluginsDirectoryHandle,
-        PhGetString(PluginsDirectory),
+        PhGetString(pluginsDirectory),
         FILE_LIST_DIRECTORY | SYNCHRONIZE,
         FILE_ATTRIBUTE_DIRECTORY,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -431,6 +480,7 @@ VOID PhLoadPlugins(
     }
 
     PhDereferenceObject(pluginLoadErrors);
+    PhDereferenceObject(pluginsDirectory);
 }
 
 /**
@@ -494,14 +544,15 @@ VOID PhpExecuteCallbackForAllPlugins(
                 PH_STRINGREF pluginName;
                 PH_STRINGREF parameter;
 
-                if (PhSplitStringRefAtChar(&string->sr, ':', &pluginName, &parameter) &&
+                if (PhSplitStringRefAtChar(&string->sr, L':', &pluginName, &parameter) &&
                     PhEqualStringRef(&pluginName, &plugin->Name, FALSE) &&
                     parameter.Length != 0)
                 {
                     if (!parameters)
                         parameters = PhCreateList(3);
 
-                    PhAddItemList(parameters, PhCreateString2(&parameter));
+                    if (parameters)
+                        PhAddItemList(parameters, PhCreateString2(&parameter));
                 }
             }
         }
@@ -529,7 +580,7 @@ BOOLEAN PhpValidatePluginName(
 
     for (i = 0; i < count; i++)
     {
-        if (!iswalnum(buffer[i]) && buffer[i] != ' ' && buffer[i] != '.' && buffer[i] != '_')
+        if (!iswalnum(buffer[i]) && buffer[i] != L' ' && buffer[i] != L'.' && buffer[i] != L'_')
         {
             return FALSE;
         }
@@ -676,7 +727,7 @@ PPH_CALLBACK PhGetPluginCallback(
     return &Plugin->Callbacks[Callback];
 }
 
-VOID PhInitializeCallbacks( // HACK (dmex)
+VOID PhInitializeCallbacks(
     VOID
     )
 {
@@ -1018,6 +1069,7 @@ VOID PhPluginEnableTreeNewNotify(
     PhCmSetNotifyPlugin(CmData, Plugin);
 }
 
+_Success_(return)
 BOOLEAN PhPluginQueryPhSvc(
     _Out_ PPH_PLUGIN_PHSVC_CLIENT Client
     )
@@ -1045,9 +1097,9 @@ NTSTATUS PhPluginCallPhSvc(
     PPH_STRING apiId;
     PH_FORMAT format[4];
 
-    PhInitFormatC(&format[0], '+');
+    PhInitFormatC(&format[0], L'+');
     PhInitFormatSR(&format[1], Plugin->Name);
-    PhInitFormatC(&format[2], '+');
+    PhInitFormatC(&format[2], L'+');
     PhInitFormatU(&format[3], SubId);
     apiId = PhFormat(format, 4, 50);
 

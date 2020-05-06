@@ -276,7 +276,7 @@ INT_PTR CALLBACK CustomizeStatusBarDialogProc(
 
     if (uMsg == WM_INITDIALOG)
     {
-        context = (PCUSTOMIZE_CONTEXT)PhAllocate(sizeof(CUSTOMIZE_CONTEXT));
+        context = PhAllocate(sizeof(CUSTOMIZE_CONTEXT));
         memset(context, 0, sizeof(CUSTOMIZE_CONTEXT));
 
         PhSetWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT, context);
@@ -284,12 +284,6 @@ INT_PTR CALLBACK CustomizeStatusBarDialogProc(
     else
     {
         context = PhGetWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT);
-
-        if (uMsg == WM_NCDESTROY)
-        {
-            PhRemoveWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT);
-            PhFree(context);
-        }
     }
 
     if (context == NULL)
@@ -308,7 +302,7 @@ INT_PTR CALLBACK CustomizeStatusBarDialogProc(
             context->MoveDownButtonHandle = GetDlgItem(hwndDlg, IDC_MOVEDOWN);
             context->AddButtonHandle = GetDlgItem(hwndDlg, IDC_ADD);
             context->RemoveButtonHandle = GetDlgItem(hwndDlg, IDC_REMOVE);
-            context->FontHandle = PhDuplicateFont((HFONT)SendMessage(StatusBarHandle, WM_GETFONT, 0, 0));
+            context->FontHandle = PhDuplicateFont(GetWindowFont(StatusBarHandle));
 
             ListBox_SetItemHeight(context->AvailableListHandle, 0, PH_SCALE_DPI(22)); // BitmapHeight
             ListBox_SetItemHeight(context->CurrentListHandle, 0, PH_SCALE_DPI(22)); // BitmapHeight
@@ -326,8 +320,14 @@ INT_PTR CALLBACK CustomizeStatusBarDialogProc(
 
             if (context->FontHandle)
             {
-                DeleteObject(context->FontHandle);
+                DeleteFont(context->FontHandle);
             }
+        }
+        break;
+    case WM_NCDESTROY:
+        {
+            PhRemoveWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT);
+            PhFree(context);
         }
         break;
     case WM_COMMAND:

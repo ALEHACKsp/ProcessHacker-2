@@ -187,6 +187,7 @@ PPH_STRING QueryFwLinkUrl(
     if (!PhHttpSocketEndRequest(httpContext))
         goto CleanupExit;
     
+    //redirectUrl = PhCreateString(L"https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz");
     redirectUrl = PhHttpSocketQueryHeaderString(httpContext, L"Location"); // WINHTTP_QUERY_LOCATION
 
 CleanupExit:
@@ -306,7 +307,7 @@ NTSTATUS GeoIPUpdateThread(
 
         memset(buffer, 0, PAGE_SIZE);
 
-        status = PhFormatString(L"Downloading GeoLite2-Country.mmdb...");
+        status = PhFormatString(L"Downloading GeoLite2-Country...");
         SendMessage(context->DialogHandle, TDM_SET_MARQUEE_PROGRESS_BAR, FALSE, 0);
         SendMessage(context->DialogHandle, TDM_UPDATE_ELEMENT_TEXT, TDE_MAIN_INSTRUCTION, (LPARAM)status->Buffer);
         PhDereferenceObject(status);
@@ -325,7 +326,7 @@ NTSTATUS GeoIPUpdateThread(
 
         while (PhHttpSocketReadData(httpContext, buffer, PAGE_SIZE, &bytesDownloaded))
         {
-            // If we get zero bytes, the file was uploaded or there was an error.
+            // If we get zero bytes, the file was downloaded or there was an error.
             if (bytesDownloaded == 0)
                 break;
 
@@ -364,35 +365,36 @@ NTSTATUS GeoIPUpdateThread(
             // TODO: Update on timer callback.
             {
                 FLOAT percent = ((FLOAT)downloadedBytes / contentLength * 100);
-                PPH_STRING totalLength = PhFormatSize(contentLength, -1);
-                PPH_STRING totalDownloaded = PhFormatSize(downloadedBytes, -1);
-                PPH_STRING totalSpeed = PhFormatSize(timeBitsPerSecond, -1);
+                PH_FORMAT format[9];
+                WCHAR string[MAX_PATH];
 
-                PPH_STRING statusMessage = PhFormatString(
-                    L"Downloaded: %s of %s (%.0f%%)\r\nSpeed: %s/s",
-                    PhGetStringOrEmpty(totalDownloaded),
-                    PhGetStringOrEmpty(totalLength),
-                    percent,
-                    PhGetStringOrEmpty(totalSpeed)
-                    );
+                // L"Downloaded: %s of %s (%.0f%%)\r\nSpeed: %s/s"
+                PhInitFormatS(&format[0], L"Downloaded: ");
+                PhInitFormatSize(&format[1], downloadedBytes);
+                PhInitFormatS(&format[2], L" of ");
+                PhInitFormatSize(&format[3], contentLength);
+                PhInitFormatS(&format[4], L" (");
+                PhInitFormatF(&format[5], percent, 1);
+                PhInitFormatS(&format[6], L"%)\r\nSpeed: ");
+                PhInitFormatSize(&format[7], timeBitsPerSecond);
+                PhInitFormatS(&format[8], L"/s");
 
-                SendMessage(context->DialogHandle, TDM_UPDATE_ELEMENT_TEXT, TDE_CONTENT, (LPARAM)statusMessage->Buffer);
+                if (PhFormatToBuffer(format, RTL_NUMBER_OF(format), string, sizeof(string), NULL))
+                {
+                    SendMessage(context->DialogHandle, TDM_UPDATE_ELEMENT_TEXT, TDE_CONTENT, (LPARAM)string);
+                }
+
                 SendMessage(context->DialogHandle, TDM_SET_PROGRESS_BAR_POS, (WPARAM)percent, 0);
-
-                PhDereferenceObject(statusMessage);
-                PhDereferenceObject(totalSpeed);
-                PhDereferenceObject(totalLength);
-                PhDereferenceObject(totalDownloaded);
             }
         }
 
         {
-            dbpath = NetToolsGetGeoLiteDbPath();
+            dbpath = NetToolsGetGeoLiteDbPath(SETTING_NAME_DB_LOCATION);
 
             if (PhIsNullOrEmptyString(dbpath))
                 goto CleanupExit;
 
-            if (RtlDoesFileExists_U(PhGetString(dbpath)))
+            if (PhDoesFileExistsWin32(PhGetString(dbpath)))
             {
                 if (!NT_SUCCESS(PhDeleteFileWin32(PhGetString(dbpath))))
                     goto CleanupExit;
@@ -435,7 +437,7 @@ NTSTATUS GeoIPUpdateThread(
                     {
                         INT bytes = gzread(gzfile, buffer, sizeof(buffer));
 
-                        if (bytes == -1)
+                        if (bytes == INT_MAX)
                         {
                             NtClose(mmdbFileHandle);
                             goto CleanupExit;
@@ -497,14 +499,8 @@ CleanupExit:
 
     if (context->DialogHandle)
     {
-        if (success)
-        {
-            PostMessage(context->DialogHandle, PH_SHOWINSTALL, 0, 0);
-        }
-        else
-        {
-            PostMessage(context->DialogHandle, PH_SHOWERROR, 0, 0);
-        }
+        PostMessage(context->DialogHandle,
+            success ? PH_SHOWINSTALL : PH_SHOWERROR, 0, 0);
     }
 
     PhDereferenceObject(context);
@@ -578,7 +574,7 @@ HRESULT CALLBACK TaskDialogBootstrapCallback(
             UpdateDialogHandle = context->DialogHandle = hwndDlg;
 
             // Center the update window on PH if it's visible else we center on the desktop.
-            PhCenterWindow(hwndDlg, (IsWindowVisible(PhMainWndHandle) && !IsMinimized(PhMainWndHandle)) ? PhMainWndHandle : NULL);
+            PhCenterWindow(hwndDlg, PhMainWndHandle);
 
             // Create the Taskdialog icons
             TaskDialogCreateIcons(context);
@@ -675,9 +671,9 @@ VOID ShowGeoIPUpdateDialog(
 {
     if (!UpdateDialogThreadHandle)
     {
-        if (!(UpdateDialogThreadHandle = PhCreateThread(0, GeoIPUpdateDialogThread, NULL)))
+        if (!NT_SUCCESS(PhCreateThreadEx(&UpdateDialogThreadHandle, GeoIPUpdateDialogThread, NULL)))
         {
-            PhShowStatus(PhMainWndHandle, L"Unable to create the updater window.", 0, GetLastError());
+            PhShowError(PhMainWndHandle, L"Unable to create the window.");
             return;
         }
 

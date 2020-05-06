@@ -12,7 +12,7 @@ typedef struct _PH_NETWORK_ITEM
     ULONG ProtocolType;
     PH_IP_ENDPOINT LocalEndpoint;
     PH_IP_ENDPOINT RemoteEndpoint;
-    ULONG State;
+    MIB_TCP_STATE State;
     HANDLE ProcessId;
 
     PPH_STRING ProcessName;
@@ -69,9 +69,9 @@ PhReferenceNetworkItem(
     );
 // end_phapppub
 
-PPH_STRING PhGetHostNameFromAddress(
-    _In_ PPH_IP_ADDRESS Address
-    );
+//PPH_STRING PhGetHostNameFromAddress(
+//    _In_ PPH_IP_ADDRESS Address
+//    );
 
 VOID PhNetworkProviderUpdate(
     _In_ PVOID Object

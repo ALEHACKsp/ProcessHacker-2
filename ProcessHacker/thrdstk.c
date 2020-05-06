@@ -328,7 +328,7 @@ VOID RemoveThreadStackNode(
 
     PhRemoveEntryHashtable(Context->NodeHashtable, &Node);
 
-    if ((index = PhFindItemList(Context->NodeList, Node)) != -1)
+    if ((index = PhFindItemList(Context->NodeList, Node)) != ULONG_MAX)
     {
         PhRemoveItemList(Context->NodeList, index);
     }
@@ -359,11 +359,18 @@ BOOLEAN NTAPI ThreadStackTreeNewCallback(
     PPH_THREAD_STACK_CONTEXT context = Context;
     PPH_STACK_TREE_ROOT_NODE node;
 
+    if (!context)
+        return FALSE;
+
     switch (Message)
     {
     case TreeNewGetChildren:
         {
             PPH_TREENEW_GET_CHILDREN getChildren = Parameter1;
+
+            if (!getChildren)
+                break;
+
             node = (PPH_STACK_TREE_ROOT_NODE)getChildren->Node;
 
             if (!getChildren->Node)
@@ -401,6 +408,10 @@ BOOLEAN NTAPI ThreadStackTreeNewCallback(
     case TreeNewIsLeaf:
         {
             PPH_TREENEW_IS_LEAF isLeaf = (PPH_TREENEW_IS_LEAF)Parameter1;
+
+            if (!isLeaf)
+                break;
+
             node = (PPH_STACK_TREE_ROOT_NODE)isLeaf->Node;
 
             isLeaf->IsLeaf = TRUE;
@@ -409,6 +420,10 @@ BOOLEAN NTAPI ThreadStackTreeNewCallback(
     case TreeNewGetCellText:
         {
             PPH_TREENEW_GET_CELL_TEXT getCellText = (PPH_TREENEW_GET_CELL_TEXT)Parameter1;
+
+            if (!getCellText)
+                break;
+
             node = (PPH_STACK_TREE_ROOT_NODE)getCellText->Node;
 
             switch (getCellText->Id)
@@ -456,6 +471,10 @@ BOOLEAN NTAPI ThreadStackTreeNewCallback(
     case TreeNewGetNodeColor:
         {
             PPH_TREENEW_GET_NODE_COLOR getNodeColor = Parameter1;
+
+            if (!getNodeColor)
+                break;
+
             node = (PPH_STACK_TREE_ROOT_NODE)getNodeColor->Node;
 
             if (PhCsUseColorSystemThreadStack && (ULONG_PTR)node->StackFrame.PcAddress > PhSystemBasicInformation.MaximumUserModeAddress)
@@ -508,6 +527,10 @@ BOOLEAN NTAPI ThreadStackTreeNewCallback(
     case TreeNewGetCellTooltip:
         {
             PPH_TREENEW_GET_CELL_TOOLTIP getCellTooltip = Parameter1;
+
+            if (!getCellTooltip)
+                break;
+
             node = (PPH_STACK_TREE_ROOT_NODE)getCellTooltip->Node;
 
             if (getCellTooltip->Column->Id != 0)
@@ -645,14 +668,14 @@ VOID InitializeThreadStackTree(
 
     PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_INDEX, TRUE, L"#", 30, PH_ALIGN_LEFT, 0, 0);
     PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_SYMBOL, TRUE, L"Name", 250, PH_ALIGN_LEFT, 1, 0);
-    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_STACKADDRESS, FALSE, L"Stack address", 100, PH_ALIGN_LEFT, -1, 0);
-    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_FRAMEADDRESS, FALSE, L"Frame address", 100, PH_ALIGN_LEFT, -1, 0);
-    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_PARAMETER1, FALSE, L"Stack parameter #1", 100, PH_ALIGN_LEFT, -1, 0);
-    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_PARAMETER2, FALSE, L"Stack parameter #2", 100, PH_ALIGN_LEFT, -1, 0);
-    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_PARAMETER3, FALSE, L"Stack parameter #3", 100, PH_ALIGN_LEFT, -1, 0);
-    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_PARAMETER4, FALSE, L"Stack parameter #4", 100, PH_ALIGN_LEFT, -1, 0);
-    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_CONTROLADDRESS, FALSE, L"Control address", 100, PH_ALIGN_LEFT, -1, 0);
-    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_RETURNADDRESS, FALSE, L"Return address", 100, PH_ALIGN_LEFT, -1, 0);
+    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_STACKADDRESS, FALSE, L"Stack address", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
+    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_FRAMEADDRESS, FALSE, L"Frame address", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
+    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_PARAMETER1, FALSE, L"Stack parameter #1", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
+    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_PARAMETER2, FALSE, L"Stack parameter #2", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
+    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_PARAMETER3, FALSE, L"Stack parameter #3", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
+    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_PARAMETER4, FALSE, L"Stack parameter #4", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
+    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_CONTROLADDRESS, FALSE, L"Control address", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
+    PhAddTreeNewColumn(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_RETURNADDRESS, FALSE, L"Return address", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
 
     TreeNew_SetTriState(Context->TreeNewHandle, FALSE);
     TreeNew_SetSort(Context->TreeNewHandle, PH_STACK_TREE_COLUMN_INDEX, AscendingSortOrder);
@@ -682,9 +705,10 @@ VOID NTAPI PhpThreadStackContextDeleteProcedure(
 {
     PPH_THREAD_STACK_CONTEXT context = (PPH_THREAD_STACK_CONTEXT)Object;
 
-    PhDereferenceObject(context->StatusMessage);
-    PhDereferenceObject(context->NewList);
-    PhDereferenceObject(context->List);
+    if (context->StatusMessage) PhDereferenceObject(context->StatusMessage);
+    if (context->StatusContent) PhDereferenceObject(context->StatusContent);
+    if (context->NewList) PhDereferenceObject(context->NewList);
+    if (context->List) PhDereferenceObject(context->List);
 
     if (context->ThreadHandle)
         NtClose(context->ThreadHandle);
@@ -854,13 +878,6 @@ INT_PTR CALLBACK PhpThreadStackDlgProc(
         {
             context->StopWalk = TRUE;
 
-            // HACK HACK HACK
-            // PhWalkThreadStack will suspend the thread before walking the stack and download symbols but
-            // we don't wait for the stack walk / symbol downloading to complete when the user closes the progress dialog
-            // and so the thread can remain suspended for a long time (in some cases)... For now just resume the thread
-            // when closing the dialog since those results will be discarded and PhWalkThreadStack will cleanup whenever it completes. (dmex)
-            NtResumeThread(context->ThreadHandle, NULL);
-
             DeleteThreadStackTree(context);
 
             PhDeleteLayoutManager(&context->LayoutManager);
@@ -919,7 +936,7 @@ INT_PTR CALLBACK PhpThreadStackDlgProc(
                     if (selectedNode = GetSelectedThreadStackNode(context))
                     {
                         menu = PhCreateEMenu();
-                        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, IDC_COPY, L"Copy", NULL, NULL), -1);
+                        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, IDC_COPY, L"Copy", NULL, NULL), ULONG_MAX);
                         PhInsertCopyCellEMenuItem(menu, IDC_COPY, context->TreeNewHandle, contextMenuEvent->Column);
 
                         selectedItem = PhShowEMenu(
@@ -931,7 +948,7 @@ INT_PTR CALLBACK PhpThreadStackDlgProc(
                             contextMenuEvent->Location.y
                             );
 
-                        if (selectedItem && selectedItem->Id != -1)
+                        if (selectedItem && selectedItem->Id != ULONG_MAX)
                         {
                             BOOLEAN handled = FALSE;
 
@@ -977,6 +994,8 @@ BOOLEAN NTAPI PhpWalkThreadStackCallback(
     PPH_STRING symbol;
     PTHREAD_STACK_ITEM item;
 
+    if (!threadStackContext)
+        return FALSE;
     if (threadStackContext->StopWalk)
         return FALSE;
 
@@ -985,7 +1004,7 @@ BOOLEAN NTAPI PhpWalkThreadStackCallback(
     PhReleaseQueuedLockExclusive(&threadStackContext->StatusLock);
 
     symbol = PhGetSymbolFromAddress(
-       threadStackContext->SymbolProvider,
+        threadStackContext->SymbolProvider,
         (ULONG64)StackFrame->PcAddress,
         NULL,
         NULL,
@@ -1145,6 +1164,9 @@ VOID PhpSymbolProviderEventCallbackHandler(
     PPH_THREAD_STACK_CONTEXT context = Context;
     PPH_STRING statusMessage = NULL;
 
+    if (!event)
+        return;
+
     switch (event->ActionCode)
     {
     case CBA_DEFERRED_SYMBOL_LOAD_START:
@@ -1265,7 +1287,7 @@ HRESULT CALLBACK PhpThreadStackTaskDialogCallback(
             if ((INT)wParam == IDCANCEL)
             {
                 context->StopWalk = TRUE;
-                //context->SymbolProvider->Terminating = TRUE; // HACK: Cancel symbol load/download.
+                context->SymbolProvider->Terminating = TRUE;
             }
 
             //if (!context->EnableCloseDialog)

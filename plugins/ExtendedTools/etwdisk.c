@@ -50,11 +50,12 @@ VOID NTAPI EtpDiskProcessesUpdatedCallback(
     );
 
 BOOLEAN EtDiskEnabled = FALSE;
+ULONG EtRunCount = 0;
 
-PPH_OBJECT_TYPE EtDiskItemType;
-PPH_HASHTABLE EtDiskHashtable;
+PPH_OBJECT_TYPE EtDiskItemType = NULL;
+PPH_HASHTABLE EtDiskHashtable = NULL;
 PH_QUEUED_LOCK EtDiskHashtableLock = PH_QUEUED_LOCK_INIT;
-LIST_ENTRY EtDiskAgeListHead;
+LIST_ENTRY EtDiskAgeListHead = { &EtDiskAgeListHead, &EtDiskAgeListHead };
 PH_CALLBACK_DECLARE(EtDiskItemAddedEvent);
 PH_CALLBACK_DECLARE(EtDiskItemModifiedEvent);
 PH_CALLBACK_DECLARE(EtDiskItemRemovedEvent);
@@ -62,7 +63,7 @@ PH_CALLBACK_DECLARE(EtDiskItemsUpdatedEvent);
 
 PH_FREE_LIST EtDiskPacketFreeList;
 SLIST_HEADER EtDiskPacketListHead;
-PPH_HASHTABLE EtFileNameHashtable;
+PPH_HASHTABLE EtFileNameHashtable = NULL;
 PH_QUEUED_LOCK EtFileNameHashtableLock = PH_QUEUED_LOCK_INIT;
 
 static LARGE_INTEGER EtpPerformanceFrequency;
@@ -81,7 +82,6 @@ VOID EtInitializeDiskInformation(
         EtpDiskHashtableHashFunction,
         128
         );
-    InitializeListHead(&EtDiskAgeListHead);
 
     PhInitializeFreeList(&EtDiskPacketFreeList, sizeof(ETP_DISK_PACKET), 64);
     RtlInitializeSListHead(&EtDiskPacketListHead);
@@ -124,8 +124,10 @@ VOID NTAPI EtpDiskItemDeleteProcedure(
     if (diskItem->FileName) PhDereferenceObject(diskItem->FileName);
     if (diskItem->FileNameWin32) PhDereferenceObject(diskItem->FileNameWin32);
     if (diskItem->ProcessName) PhDereferenceObject(diskItem->ProcessName);
-    if (diskItem->ProcessIcon) EtProcIconDereferenceProcessIcon(diskItem->ProcessIcon);
     if (diskItem->ProcessRecord) PhDereferenceProcessRecord(diskItem->ProcessRecord);
+
+    // NOTE: Dereferencing the ProcessItem will destroy the DiskItem->ProcessIcon handle.
+    if (diskItem->ProcessItem) PhDereferenceObject(diskItem->ProcessItem);
 }
 
 BOOLEAN NTAPI EtpDiskHashtableEqualFunction(
@@ -302,12 +304,19 @@ VOID EtpProcessDiskPacket(
 
         if (processItem = PhReferenceProcessItem(diskItem->ProcessId))
         {
+            diskItem->ProcessItem = processItem;
             PhSetReference(&diskItem->ProcessName, processItem->ProcessName);
-            diskItem->ProcessIcon = EtProcIconReferenceSmallProcessIcon(EtGetProcessBlock(processItem));
-            diskItem->ProcessRecord = processItem->Record;
-            PhReferenceProcessRecord(diskItem->ProcessRecord);
 
-            PhDereferenceObject(processItem);
+            PhReferenceProcessRecord(processItem->Record);
+            diskItem->ProcessRecord = processItem->Record;
+
+            if (!diskItem->ProcessIconValid && PhTestEvent(&processItem->Stage1Event))
+            {
+                diskItem->ProcessIcon = processItem->SmallIcon;
+                diskItem->ProcessIconValid = TRUE;
+            }
+
+            // NOTE: We dereference processItem in EtpDiskItemDeleteProcedure. (dmex)
         }
 
         // Add the disk item to the age list.
@@ -401,8 +410,6 @@ VOID NTAPI EtpDiskProcessesUpdatedCallback(
     _In_opt_ PVOID Context
     )
 {
-    static ULONG runCount = 0;
-
     PSLIST_ENTRY listEntry;
     PLIST_ENTRY ageListEntry;
 
@@ -417,7 +424,7 @@ VOID NTAPI EtpDiskProcessesUpdatedCallback(
         packet = CONTAINING_RECORD(listEntry, ETP_DISK_PACKET, ListEntry);
         listEntry = listEntry->Next;
 
-        EtpProcessDiskPacket(packet, runCount);
+        EtpProcessDiskPacket(packet, EtRunCount);
 
         if (packet->FileName)
             PhDereferenceObject(packet->FileName);
@@ -436,7 +443,7 @@ VOID NTAPI EtpDiskProcessesUpdatedCallback(
         diskItem = CONTAINING_RECORD(ageListEntry, ET_DISK_ITEM, AgeListEntry);
         ageListEntry = ageListEntry->Blink;
 
-        if (runCount - diskItem->FreshTime < HISTORY_SIZE) // must compare like this to avoid overflow/underflow problems
+        if (EtRunCount - diskItem->FreshTime < HISTORY_SIZE) // must compare like this to avoid overflow/underflow problems
             break;
 
         PhInvokeCallback(&EtDiskItemRemovedEvent, diskItem);
@@ -488,36 +495,36 @@ VOID NTAPI EtpDiskProcessesUpdatedCallback(
         diskItem->ReadAverage = EtpCalculateAverage(diskItem->ReadHistory, HISTORY_SIZE, diskItem->HistoryPosition, diskItem->HistoryCount, HISTORY_SIZE);
         diskItem->WriteAverage = EtpCalculateAverage(diskItem->WriteHistory, HISTORY_SIZE, diskItem->HistoryPosition, diskItem->HistoryCount, HISTORY_SIZE);
 
-        if (diskItem->AddTime != runCount)
+        if (diskItem->AddTime != EtRunCount)
         {
             BOOLEAN modified = FALSE;
-            PPH_PROCESS_ITEM processItem;
 
-            if (!diskItem->ProcessName || !diskItem->ProcessIcon || !diskItem->ProcessRecord)
+            if (!diskItem->ProcessItem)
             {
-                if (processItem = PhReferenceProcessItem(diskItem->ProcessId))
+                diskItem->ProcessItem = PhReferenceProcessItem(diskItem->ProcessId);
+                // NOTE: We dereference processItem in EtpDiskItemDeleteProcedure. (dmex)
+            }
+
+            if (diskItem->ProcessItem)
+            {
+                if (!diskItem->ProcessName)
                 {
-                    if (!diskItem->ProcessName)
-                    {
-                        PhSetReference(&diskItem->ProcessName, processItem->ProcessName);
-                        modified = TRUE;
-                    }
+                    PhSetReference(&diskItem->ProcessName, diskItem->ProcessItem->ProcessName);
+                    modified = TRUE;
+                }
 
-                    if (!diskItem->ProcessIcon)
-                    {
-                        diskItem->ProcessIcon = EtProcIconReferenceSmallProcessIcon(EtGetProcessBlock(processItem));
+                if (!diskItem->ProcessIconValid && PhTestEvent(&diskItem->ProcessItem->Stage1Event))
+                {
+                    diskItem->ProcessIcon = diskItem->ProcessItem->SmallIcon;
+                    diskItem->ProcessIconValid = TRUE;
+                    modified = TRUE;
+                }
 
-                        if (diskItem->ProcessIcon)
-                            modified = TRUE;
-                    }
-
-                    if (!diskItem->ProcessRecord)
-                    {
-                        diskItem->ProcessRecord = processItem->Record;
-                        PhReferenceProcessRecord(diskItem->ProcessRecord);
-                    }
-
-                    PhDereferenceObject(processItem);
+                if (!diskItem->ProcessRecord)
+                {
+                    PhReferenceProcessRecord(diskItem->ProcessItem->Record);
+                    diskItem->ProcessRecord = diskItem->ProcessItem->Record;
+                    modified = TRUE;
                 }
             }
 
@@ -532,5 +539,5 @@ VOID NTAPI EtpDiskProcessesUpdatedCallback(
     }
 
     PhInvokeCallback(&EtDiskItemsUpdatedEvent, NULL);
-    runCount++;
+    EtRunCount++;
 }

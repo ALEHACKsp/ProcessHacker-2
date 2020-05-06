@@ -60,9 +60,6 @@
     <ClCompile Include="disktab.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="procicon.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="utils.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -91,6 +88,9 @@
       <Filter>Source Files\Video</Filter>
     </ClCompile>
     <ClCompile Include="svcext.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="counters.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

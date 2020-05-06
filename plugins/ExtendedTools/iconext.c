@@ -3,7 +3,7 @@
  *   notification icon extensions
  *
  * Copyright (C) 2011 wj32
- * Copyright (C) 2016-2019 dmex
+ * Copyright (C) 2016-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -26,12 +26,28 @@
 #include "gpusys.h"
 #include <toolstatusintf.h>
 
-#define GPU_ICON_ID 1
-#define DISK_ICON_ID 2
-#define NETWORK_ICON_ID 3
-#define GPU_ICON_TEXT_ID 4
-#define DISK_ICON_TEXT_ID 5
-#define NETWORK_ICON_TEXT_ID 6
+typedef enum _ETP_TRAY_ICON_ID
+{
+    ETP_TRAY_ICON_ID_NONE,
+    ETP_TRAY_ICON_ID_GPU,
+    ETP_TRAY_ICON_ID_DISK,
+    ETP_TRAY_ICON_ID_NETWORK,
+    ETP_TRAY_ICON_ID_GPUTEXT,
+    ETP_TRAY_ICON_ID_DISKTEXT,
+    ETP_TRAY_ICON_ID_NETWORKTEXT,
+    ETP_TRAY_ICON_ID_MAXIMUM
+} ETP_TRAY_ICON_ID;
+
+typedef enum _ETP_TRAY_ICON_GUID
+{
+    ETP_TRAY_ICON_GUID_GPU,
+    ETP_TRAY_ICON_GUID_DISK,
+    ETP_TRAY_ICON_GUID_NETWORK,
+    ETP_TRAY_ICON_GUID_GPUTEXT,
+    ETP_TRAY_ICON_GUID_DISKTEXT,
+    ETP_TRAY_ICON_GUID_NETWORKTEXT,
+    ETP_TRAY_ICON_GUID_MAXIMUM
+} ETP_TRAY_ICON_GUID;
 
 VOID EtpGpuIconUpdateCallback(
     _In_ struct _PH_NF_ICON *Icon,
@@ -102,6 +118,78 @@ VOID EtpNetworkTextIconUpdateCallback(
     _In_opt_ PVOID Context
     );
 
+GUID EtpTrayIconGuids[ETP_TRAY_ICON_GUID_MAXIMUM];
+
+VOID EtLoadTrayIconGuids(
+    VOID
+    )
+{
+    PPH_STRING settingsString = NULL;
+    PH_STRINGREF remaining;
+    ULONG i;
+
+    settingsString = PhGetStringSetting(SETTING_NAME_TRAYICON_GUIDS);
+
+    if (PhIsNullOrEmptyString(settingsString))
+    {
+        PH_STRING_BUILDER iconListBuilder;
+        PPH_STRING iconGuid;
+
+        PhInitializeStringBuilder(&iconListBuilder, 100);
+
+        for (i = 0; i < RTL_NUMBER_OF(EtpTrayIconGuids); i++)
+        {
+            PhGenerateGuid(&EtpTrayIconGuids[i]);
+
+            if (iconGuid = PhFormatGuid(&EtpTrayIconGuids[i]))
+            {
+                PhAppendFormatStringBuilder(
+                    &iconListBuilder,
+                    L"%s|",
+                    iconGuid->Buffer
+                    );
+                PhDereferenceObject(iconGuid);
+            }
+        }
+
+        if (iconListBuilder.String->Length != 0)
+            PhRemoveEndStringBuilder(&iconListBuilder, 1);
+
+        PhMoveReference(&settingsString, PhFinalStringBuilderString(&iconListBuilder));
+        PhSetStringSetting2(SETTING_NAME_TRAYICON_GUIDS, &settingsString->sr);
+        PhDereferenceObject(settingsString);
+    }
+    else
+    {
+        remaining = PhGetStringRef(settingsString);
+
+        for (i = 0; i < RTL_NUMBER_OF(EtpTrayIconGuids); i++)
+        {
+            PH_STRINGREF guidPart;
+            UNICODE_STRING guidStringUs;
+            GUID guid;
+
+            if (remaining.Length == 0)
+                continue;
+
+            PhSplitStringRefAtChar(&remaining, L'|', &guidPart, &remaining);
+
+            if (guidPart.Length == 0)
+                continue;
+
+            if (!PhStringRefToUnicodeString(&guidPart, &guidStringUs))
+                continue;
+
+            if (!NT_SUCCESS(RtlGUIDFromString(&guidStringUs, &guid)))
+                PhGenerateGuid(&EtpTrayIconGuids[i]);
+            else
+                EtpTrayIconGuids[i] = guid;
+        }
+
+        PhDereferenceObject(settingsString);
+    }
+}
+
 VOID EtRegisterNotifyIcons(
     _In_ PPH_TRAY_ICON_POINTERS Pointers
     )
@@ -114,7 +202,8 @@ VOID EtRegisterNotifyIcons(
     data.MessageCallback = EtpGpuIconMessageCallback;
     Pointers->RegisterTrayIcon(
         PluginInstance,
-        GPU_ICON_ID,
+        ETP_TRAY_ICON_ID_GPU,
+        EtpTrayIconGuids[ETP_TRAY_ICON_GUID_GPU],
         NULL,
         L"&GPU history",
         EtGpuEnabled ? 0 : PH_NF_ICON_UNAVAILABLE,
@@ -125,7 +214,8 @@ VOID EtRegisterNotifyIcons(
     data.MessageCallback = EtpDiskIconMessageCallback;
     Pointers->RegisterTrayIcon(
         PluginInstance,
-        DISK_ICON_ID,
+        ETP_TRAY_ICON_ID_DISK,
+        EtpTrayIconGuids[ETP_TRAY_ICON_GUID_DISK],
         NULL,
         L"&Disk history",
         EtEtwEnabled ? 0 : PH_NF_ICON_UNAVAILABLE,
@@ -136,7 +226,8 @@ VOID EtRegisterNotifyIcons(
     data.MessageCallback = EtpNetworkIconMessageCallback;
     Pointers->RegisterTrayIcon(
         PluginInstance,
-        NETWORK_ICON_ID,
+        ETP_TRAY_ICON_ID_NETWORK,
+        EtpTrayIconGuids[ETP_TRAY_ICON_GUID_NETWORK],
         NULL,
         L"&Network history",
         EtEtwEnabled ? 0 : PH_NF_ICON_UNAVAILABLE,
@@ -147,7 +238,8 @@ VOID EtRegisterNotifyIcons(
     data.MessageCallback = EtpGpuIconMessageCallback;
     Pointers->RegisterTrayIcon(
         PluginInstance,
-        GPU_ICON_TEXT_ID,
+        ETP_TRAY_ICON_ID_GPUTEXT,
+        EtpTrayIconGuids[ETP_TRAY_ICON_GUID_GPUTEXT],
         NULL,
         L"&GPU usage (Text)",
         EtGpuEnabled ? 0 : PH_NF_ICON_UNAVAILABLE,
@@ -158,7 +250,8 @@ VOID EtRegisterNotifyIcons(
     data.MessageCallback = EtpDiskIconMessageCallback;
     Pointers->RegisterTrayIcon(
         PluginInstance,
-        DISK_ICON_TEXT_ID,
+        ETP_TRAY_ICON_ID_DISKTEXT,
+        EtpTrayIconGuids[ETP_TRAY_ICON_GUID_DISKTEXT],
         NULL,
         L"&Disk usage (Text)",
         EtEtwEnabled ? 0 : PH_NF_ICON_UNAVAILABLE,
@@ -169,7 +262,8 @@ VOID EtRegisterNotifyIcons(
     data.MessageCallback = EtpNetworkIconMessageCallback;
     Pointers->RegisterTrayIcon(
         PluginInstance,
-        NETWORK_ICON_TEXT_ID,
+        ETP_TRAY_ICON_ID_NETWORKTEXT,
+        EtpTrayIconGuids[ETP_TRAY_ICON_GUID_NETWORKTEXT],
         NULL,
         L"&Network usage (Text)",
         EtEtwEnabled ? 0 : PH_NF_ICON_UNAVAILABLE,
@@ -216,7 +310,10 @@ VOID EtpGpuIconUpdateCallback(
 
     Icon->Pointers->BeginBitmap(&drawInfo.Width, &drawInfo.Height, &bitmap, &bits, &hdc, &oldBitmap);
     maxDataCount = drawInfo.Width / 2 + 1;
-    lineData1 = _alloca(maxDataCount * sizeof(FLOAT));
+    lineData1 = _malloca(maxDataCount * sizeof(FLOAT));
+
+    if (!lineData1)
+        return;
 
     lineDataCount = min(maxDataCount, EtGpuNodeHistory.Count);
     PhCopyCircularBuffer_FLOAT(&EtGpuNodeHistory, lineData1, lineDataCount);
@@ -229,7 +326,7 @@ VOID EtpGpuIconUpdateCallback(
     if (bits)
         PhDrawGraphDirect(hdc, bits, &drawInfo);
 
-    SelectObject(hdc, oldBitmap);
+    SelectBitmap(hdc, oldBitmap);
     *NewIconOrBitmap = bitmap;
     *Flags = PH_NF_UPDATE_IS_BITMAP;
 
@@ -246,7 +343,7 @@ VOID EtpGpuIconUpdateCallback(
         maxGpuProcessItem = NULL;
 
     PhInitFormatS(&format[0], L"GPU Usage: ");
-    PhInitFormatF(&format[1], EtGpuNodeUsage * 100, 2);
+    PhInitFormatF(&format[1], (DOUBLE)EtGpuNodeUsage * 100, 2);
     PhInitFormatC(&format[2], '%');
 
     if (maxGpuProcessItem)
@@ -254,12 +351,14 @@ VOID EtpGpuIconUpdateCallback(
         PhInitFormatC(&format[3], '\n');
         PhInitFormatSR(&format[4], maxGpuProcessItem->ProcessName->sr);
         PhInitFormatS(&format[5], L": ");
-        PhInitFormatF(&format[6], EtGetProcessBlock(maxGpuProcessItem)->GpuNodeUsage * 100, 2);
+        PhInitFormatF(&format[6], (DOUBLE)EtGetProcessBlock(maxGpuProcessItem)->GpuNodeUsage * 100, 2);
         PhInitFormatC(&format[7], '%');
     }
 
     *NewText = PhFormat(format, maxGpuProcessItem ? 8 : 3, 128);
     if (maxGpuProcessItem) PhDereferenceObject(maxGpuProcessItem);
+
+    _freea(lineData1);
 }
 
 BOOLEAN EtpGpuIconMessageCallback(
@@ -325,8 +424,8 @@ VOID EtpDiskIconUpdateCallback(
 
     Icon->Pointers->BeginBitmap(&drawInfo.Width, &drawInfo.Height, &bitmap, &bits, &hdc, &oldBitmap);
     maxDataCount = drawInfo.Width / 2 + 1;
-    lineData1 = _alloca(maxDataCount * sizeof(FLOAT));
-    lineData2 = _alloca(maxDataCount * sizeof(FLOAT));
+    lineData1 = _malloca(maxDataCount * sizeof(FLOAT));
+    lineData2 = _malloca(maxDataCount * sizeof(FLOAT));
 
     lineDataCount = min(maxDataCount, EtDiskReadHistory.Count);
     max = 1024 * 1024; // minimum scaling of 1 MB.
@@ -354,7 +453,7 @@ VOID EtpDiskIconUpdateCallback(
     if (bits)
         PhDrawGraphDirect(hdc, bits, &drawInfo);
 
-    SelectObject(hdc, oldBitmap);
+    SelectBitmap(hdc, oldBitmap);
     *NewIconOrBitmap = bitmap;
     *Flags = PH_NF_UPDATE_IS_BITMAP;
 
@@ -383,6 +482,9 @@ VOID EtpDiskIconUpdateCallback(
 
     *NewText = PhFormat(format, maxDiskProcessItem ? 6 : 4, 128);
     if (maxDiskProcessItem) PhDereferenceObject(maxDiskProcessItem);
+
+    _freea(lineData2);
+    _freea(lineData1);
 }
 
 BOOLEAN EtpDiskIconMessageCallback(
@@ -448,8 +550,8 @@ VOID EtpNetworkIconUpdateCallback(
 
     Icon->Pointers->BeginBitmap(&drawInfo.Width, &drawInfo.Height, &bitmap, &bits, &hdc, &oldBitmap);
     maxDataCount = drawInfo.Width / 2 + 1;
-    lineData1 = _alloca(maxDataCount * sizeof(FLOAT));
-    lineData2 = _alloca(maxDataCount * sizeof(FLOAT));
+    lineData1 = _malloca(maxDataCount * sizeof(FLOAT));
+    lineData2 = _malloca(maxDataCount * sizeof(FLOAT));
 
     lineDataCount = min(maxDataCount, EtNetworkReceiveHistory.Count);
     max = 1024 * 1024; // minimum scaling of 1 MB.
@@ -477,7 +579,7 @@ VOID EtpNetworkIconUpdateCallback(
     if (bits)
         PhDrawGraphDirect(hdc, bits, &drawInfo);
 
-    SelectObject(hdc, oldBitmap);
+    SelectBitmap(hdc, oldBitmap);
     *NewIconOrBitmap = bitmap;
     *Flags = PH_NF_UPDATE_IS_BITMAP;
 
@@ -506,6 +608,9 @@ VOID EtpNetworkIconUpdateCallback(
 
     *NewText = PhFormat(format, maxNetworkProcessItem ? 6 : 4, 128);
     if (maxNetworkProcessItem) PhDereferenceObject(maxNetworkProcessItem);
+
+    _freea(lineData2);
+    _freea(lineData1);
 }
 
 BOOLEAN EtpNetworkIconMessageCallback(
@@ -567,14 +672,14 @@ VOID EtpGpuTextIconUpdateCallback(
 
     Icon->Pointers->BeginBitmap(&drawInfo.Width, &drawInfo.Height, &bitmap, &bits, &hdc, &oldBitmap);
 
-    PhInitFormatF(&format[0], (FLOAT)EtGpuNodeUsage * 100, 0);
+    PhInitFormatF(&format[0], (DOUBLE)EtGpuNodeUsage * 100, 0);
     text = PhFormat(format, 1, 10);
 
     drawInfo.TextColor = PhGetIntegerSetting(L"ColorCpuKernel");
     PhDrawTrayIconText(hdc, bits, &drawInfo, &text->sr);
     PhDereferenceObject(text);
 
-    SelectObject(hdc, oldBitmap);
+    SelectBitmap(hdc, oldBitmap);
     *NewIconOrBitmap = bitmap;
     *Flags = PH_NF_UPDATE_IS_BITMAP;
 
@@ -591,7 +696,7 @@ VOID EtpGpuTextIconUpdateCallback(
         maxGpuProcessItem = NULL;
 
     PhInitFormatS(&format[0], L"GPU Usage: ");
-    PhInitFormatF(&format[1], EtGpuNodeUsage * 100, 2);
+    PhInitFormatF(&format[1], (DOUBLE)EtGpuNodeUsage * 100, 2);
     PhInitFormatC(&format[2], '%');
 
     if (maxGpuProcessItem)
@@ -599,7 +704,7 @@ VOID EtpGpuTextIconUpdateCallback(
         PhInitFormatC(&format[3], '\n');
         PhInitFormatSR(&format[4], maxGpuProcessItem->ProcessName->sr);
         PhInitFormatS(&format[5], L": ");
-        PhInitFormatF(&format[6], EtGetProcessBlock(maxGpuProcessItem)->GpuNodeUsage * 100, 2);
+        PhInitFormatF(&format[6], (DOUBLE)EtGetProcessBlock(maxGpuProcessItem)->GpuNodeUsage * 100, 2);
         PhInitFormatC(&format[7], '%');
     }
 
@@ -644,17 +749,17 @@ VOID EtpDiskTextIconUpdateCallback(
 
     Icon->Pointers->BeginBitmap(&drawInfo.Width, &drawInfo.Height, &bitmap, &bits, &hdc, &oldBitmap);
 
-    if (maxValue < (EtDiskReadDelta.Delta + EtDiskWriteDelta.Delta))
-        maxValue = (EtDiskReadDelta.Delta + EtDiskWriteDelta.Delta);
+    if (maxValue < ((ULONG64)EtDiskReadDelta.Delta + EtDiskWriteDelta.Delta))
+        maxValue = ((ULONG64)EtDiskReadDelta.Delta + EtDiskWriteDelta.Delta);
 
-    PhInitFormatF(&format[0], (FLOAT)(EtDiskReadDelta.Delta + EtDiskWriteDelta.Delta) / maxValue * 100, 0);
+    PhInitFormatF(&format[0], ((DOUBLE)EtDiskReadDelta.Delta + EtDiskWriteDelta.Delta) / maxValue * 100, 0);
     text = PhFormat(format, 1, 10);
 
     drawInfo.TextColor = PhGetIntegerSetting(L"ColorIoReadOther"); // ColorIoWrite
     PhDrawTrayIconText(hdc, bits, &drawInfo, &text->sr);
     PhDereferenceObject(text);
 
-    SelectObject(hdc, oldBitmap);
+    SelectBitmap(hdc, oldBitmap);
     *NewIconOrBitmap = bitmap;
     *Flags = PH_NF_UPDATE_IS_BITMAP;
 
@@ -722,17 +827,17 @@ VOID EtpNetworkTextIconUpdateCallback(
 
     Icon->Pointers->BeginBitmap(&drawInfo.Width, &drawInfo.Height, &bitmap, &bits, &hdc, &oldBitmap);
 
-    if (maxValue < (EtNetworkReceiveDelta.Delta + EtNetworkSendDelta.Delta))
-        maxValue = (EtNetworkReceiveDelta.Delta + EtNetworkSendDelta.Delta);
+    if (maxValue < ((ULONG64)EtNetworkReceiveDelta.Delta + EtNetworkSendDelta.Delta))
+        maxValue = ((ULONG64)EtNetworkReceiveDelta.Delta + EtNetworkSendDelta.Delta);
 
-    PhInitFormatF(&format[0], (FLOAT)(EtNetworkReceiveDelta.Delta + EtNetworkSendDelta.Delta) / maxValue * 100, 0);
+    PhInitFormatF(&format[0], ((DOUBLE)EtNetworkReceiveDelta.Delta + EtNetworkSendDelta.Delta) / maxValue * 100, 0);
     text = PhFormat(format, 1, 10);
 
     drawInfo.TextColor = PhGetIntegerSetting(L"ColorIoReadOther"); // ColorIoWrite
     PhDrawTrayIconText(hdc, bits, &drawInfo, &text->sr);
     PhDereferenceObject(text);
 
-    SelectObject(hdc, oldBitmap);
+    SelectBitmap(hdc, oldBitmap);
     *NewIconOrBitmap = bitmap;
     *Flags = PH_NF_UPDATE_IS_BITMAP;
 
@@ -777,8 +882,8 @@ TOOLSTATUS_GRAPH_MESSAGE_CALLBACK_DECLARE(EtpToolbarGpuHistoryGraphMessageCallba
             drawInfo->Flags = PH_GRAPH_USE_GRID_X;
             PhSiSetColorsGraphDrawInfo(drawInfo, PhGetIntegerSetting(L"ColorCpuKernel"), 0);
 
-            if (ProcessesUpdatedCount < 2)
-                return;
+            if (ProcessesUpdatedCount != 3)
+                break;
 
             PhGraphStateGetDrawInfo(GraphState, getDrawInfo, EtGpuNodeHistory.Count);
 
@@ -798,16 +903,19 @@ TOOLSTATUS_GRAPH_MESSAGE_CALLBACK_DECLARE(EtpToolbarGpuHistoryGraphMessageCallba
             {
                 if (GraphState->TooltipIndex != getTooltipText->Index)
                 {
-                    FLOAT gpu;
+                    FLOAT gpuUsage;
+                    PH_FORMAT format[5];
 
-                    gpu = PhGetItemCircularBuffer_FLOAT(&EtGpuNodeHistory, getTooltipText->Index);
+                    gpuUsage = PhGetItemCircularBuffer_FLOAT(&EtGpuNodeHistory, getTooltipText->Index);
 
-                    PhMoveReference(&GraphState->TooltipText, PhFormatString(
-                        L"%.2f%%%s\n%s",
-                        gpu * 100,
-                        PhGetStringOrEmpty(EtpGetMaxNodeString(getTooltipText->Index)),
-                        ((PPH_STRING)PH_AUTO(PhGetStatisticsTimeString(NULL, getTooltipText->Index)))->Buffer
-                        ));
+                    // %.2f%%%s\n%s
+                    PhInitFormatF(&format[0], (DOUBLE)gpuUsage * 100, 2);
+                    PhInitFormatC(&format[1], L'%');
+                    PhInitFormatSR(&format[2], PH_AUTO_T(PH_STRING, EtpGetMaxNodeString(getTooltipText->Index))->sr);
+                    PhInitFormatC(&format[3], L'\n');
+                    PhInitFormatSR(&format[4], PH_AUTO_T(PH_STRING, PhGetStatisticsTimeString(NULL, getTooltipText->Index))->sr);
+
+                    PhMoveReference(&GraphState->TooltipText, PhFormat(format, RTL_NUMBER_OF(format), 160));
                 }
 
                 getTooltipText->Text = PhGetStringRef(GraphState->TooltipText);
@@ -848,8 +956,8 @@ TOOLSTATUS_GRAPH_MESSAGE_CALLBACK_DECLARE(EtpToolbarDiskHistoryGraphMessageCallb
             drawInfo->Flags = PH_GRAPH_USE_GRID_X | PH_GRAPH_USE_LINE_2;
             PhSiSetColorsGraphDrawInfo(drawInfo, PhGetIntegerSetting(L"ColorIoReadOther"), PhGetIntegerSetting(L"ColorIoWrite"));
 
-            if (ProcessesUpdatedCount < 2)
-                return;
+            if (ProcessesUpdatedCount != 3)
+                break;
 
             PhGraphStateGetDrawInfo(
                 GraphState,
@@ -906,17 +1014,21 @@ TOOLSTATUS_GRAPH_MESSAGE_CALLBACK_DECLARE(EtpToolbarDiskHistoryGraphMessageCallb
                 {
                     ULONG64 diskRead;
                     ULONG64 diskWrite;
+                    PH_FORMAT format[7];
 
                     diskRead = PhGetItemCircularBuffer_ULONG(&EtDiskReadHistory, getTooltipText->Index);
                     diskWrite = PhGetItemCircularBuffer_ULONG(&EtDiskWriteHistory, getTooltipText->Index);
 
-                    PhMoveReference(&GraphState->TooltipText, PhFormatString(
-                        L"R: %s\nW: %s%s\n%s",
-                        PhaFormatSize(diskRead, ULONG_MAX)->Buffer,
-                        PhaFormatSize(diskWrite, ULONG_MAX)->Buffer,
-                        PhGetStringOrEmpty(EtpGetMaxDiskString(getTooltipText->Index)),
-                        ((PPH_STRING)PH_AUTO(PhGetStatisticsTimeString(NULL, getTooltipText->Index)))->Buffer
-                        ));
+                    // R: %s\nW: %s%s\n%s
+                    PhInitFormatS(&format[0], L"R: ");
+                    PhInitFormatSize(&format[1], diskRead);
+                    PhInitFormatS(&format[2], L"\nW: ");
+                    PhInitFormatSize(&format[3], diskWrite);
+                    PhInitFormatSR(&format[4], PH_AUTO_T(PH_STRING, EtpGetMaxDiskString(getTooltipText->Index))->sr);
+                    PhInitFormatC(&format[5], L'\n');
+                    PhInitFormatSR(&format[6], PH_AUTO_T(PH_STRING, PhGetStatisticsTimeString(NULL, getTooltipText->Index))->sr);
+
+                    PhMoveReference(&GraphState->TooltipText, PhFormat(format, RTL_NUMBER_OF(format), 160));
                 }
 
                 getTooltipText->Text = PhGetStringRef(GraphState->TooltipText);
@@ -957,8 +1069,8 @@ TOOLSTATUS_GRAPH_MESSAGE_CALLBACK_DECLARE(EtpToolbarNetworkHistoryGraphMessageCa
             drawInfo->Flags = PH_GRAPH_USE_GRID_X | PH_GRAPH_USE_LINE_2;
             PhSiSetColorsGraphDrawInfo(drawInfo, PhGetIntegerSetting(L"ColorIoReadOther"), PhGetIntegerSetting(L"ColorIoWrite"));
 
-            if (ProcessesUpdatedCount < 2)
-                return;
+            if (ProcessesUpdatedCount != 3)
+                break;
 
             PhGraphStateGetDrawInfo(
                 GraphState,
@@ -1015,17 +1127,21 @@ TOOLSTATUS_GRAPH_MESSAGE_CALLBACK_DECLARE(EtpToolbarNetworkHistoryGraphMessageCa
                 {
                     ULONG64 networkReceive;
                     ULONG64 networkSend;
+                    PH_FORMAT format[7];
 
                     networkReceive = PhGetItemCircularBuffer_ULONG(&EtNetworkReceiveHistory, getTooltipText->Index);
                     networkSend = PhGetItemCircularBuffer_ULONG(&EtNetworkSendHistory, getTooltipText->Index);
 
-                    PhMoveReference(&GraphState->TooltipText, PhFormatString(
-                        L"R: %s\nS: %s%s\n%s",
-                        PhaFormatSize(networkReceive, ULONG_MAX)->Buffer,
-                        PhaFormatSize(networkSend, ULONG_MAX)->Buffer,
-                        PhGetStringOrEmpty(EtpGetMaxNetworkString(getTooltipText->Index)),
-                        ((PPH_STRING)PH_AUTO(PhGetStatisticsTimeString(NULL, getTooltipText->Index)))->Buffer
-                        ));
+                    // R: %s\nS: %s%s\n%s
+                    PhInitFormatS(&format[0], L"R: ");
+                    PhInitFormatSize(&format[1], networkReceive);
+                    PhInitFormatS(&format[2], L"\nS: ");
+                    PhInitFormatSize(&format[3], networkSend);
+                    PhInitFormatSR(&format[4], PH_AUTO_T(PH_STRING, EtpGetMaxNetworkString(getTooltipText->Index))->sr);
+                    PhInitFormatC(&format[5], L'\n');
+                    PhInitFormatSR(&format[6], PH_AUTO_T(PH_STRING, PhGetStatisticsTimeString(NULL, getTooltipText->Index))->sr);
+
+                    PhMoveReference(&GraphState->TooltipText, PhFormat(format, RTL_NUMBER_OF(format), 160));
                 }
 
                 getTooltipText->Text = PhGetStringRef(GraphState->TooltipText);

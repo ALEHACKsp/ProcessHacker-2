@@ -3,7 +3,7 @@
  *   graph control
  *
  * Copyright (C) 2010-2016 wj32
- * Copyright (C) 2017-2018 dmex
+ * Copyright (C) 2017-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -26,6 +26,7 @@
 
 #include <graph.h>
 #include <guisup.h>
+#include <settings.h>
 
 #define COLORREF_TO_BITS(Color) (_byteswap_ulong(Color) >> 8)
 
@@ -206,7 +207,7 @@ VOID PhDrawGraphDirect(
 
     if (DrawInfo->BackColor == 0)
     {
-        memset(bits, 0, numberOfPixels * 4);
+        memset(bits, 0, (size_t)numberOfPixels * 4);
     }
     else
     {
@@ -518,7 +519,7 @@ VOID PhDrawGraphDirect(
             RECT rect;
 
             if (DrawInfo->LabelYFont)
-                oldFont = SelectObject(hdc, DrawInfo->LabelYFont);
+                oldFont = SelectFont(hdc, DrawInfo->LabelYFont);
 
             SetTextColor(hdc, DrawInfo->LabelYColor);
             SetBkMode(hdc, TRANSPARENT);
@@ -539,7 +540,7 @@ VOID PhDrawGraphDirect(
             DrawText(hdc, label->Buffer, (ULONG)label->Length / sizeof(WCHAR), &rect, DT_NOCLIP | DT_RIGHT);
 
             if (oldFont)
-                SelectObject(hdc, oldFont);
+                SelectFont(hdc, oldFont);
 
             PhDereferenceObject(label);
         }
@@ -550,19 +551,20 @@ VOID PhDrawGraphDirect(
         HFONT oldFont = NULL;
 
         if (DrawInfo->TextFont)
-            oldFont = SelectObject(hdc, DrawInfo->TextFont);
+            oldFont = SelectFont(hdc, DrawInfo->TextFont);
+
+        SetBkMode(hdc, TRANSPARENT);
 
         // Fill in the text box.
         SetDCBrushColor(hdc, DrawInfo->TextBoxColor);
-        FillRect(hdc, &DrawInfo->TextBoxRect, GetStockObject(DC_BRUSH));
+        FillRect(hdc, &DrawInfo->TextBoxRect, GetStockBrush(DC_BRUSH));
 
         // Draw the text.
         SetTextColor(hdc, DrawInfo->TextColor);
-        SetBkMode(hdc, TRANSPARENT);
         DrawText(hdc, DrawInfo->Text.Buffer, (ULONG)DrawInfo->Text.Length / sizeof(WCHAR), &DrawInfo->TextRect, DT_NOCLIP);
 
         if (oldFont)
-            SelectObject(hdc, oldFont);
+            SelectFont(hdc, oldFont);
     }
 }
 
@@ -592,13 +594,13 @@ VOID PhSetGraphText(
     PH_RECTANGLE textRectangle;
 
     if (DrawInfo->TextFont)
-        oldFont = SelectObject(hdc, DrawInfo->TextFont);
+        oldFont = SelectFont(hdc, DrawInfo->TextFont);
 
     DrawInfo->Text = *Text;
     GetTextExtentPoint32(hdc, Text->Buffer, (ULONG)Text->Length / sizeof(WCHAR), &textSize);
 
     if (oldFont)
-        SelectObject(hdc, oldFont);
+        SelectFont(hdc, oldFont);
 
     // Calculate the box rectangle.
 
@@ -610,14 +612,14 @@ VOID PhSetGraphText(
     else if (Align & PH_ALIGN_RIGHT)
         boxRectangle.Left = DrawInfo->Width - boxRectangle.Width - Margin->right;
     else
-        boxRectangle.Left = (DrawInfo->Width - boxRectangle.Width) / sizeof(WCHAR);
+        boxRectangle.Left = (DrawInfo->Width - boxRectangle.Width) / (LONG)sizeof(WCHAR);
 
     if (Align & PH_ALIGN_TOP)
         boxRectangle.Top = Margin->top;
     else if (Align & PH_ALIGN_BOTTOM)
         boxRectangle.Top = DrawInfo->Height - boxRectangle.Height - Margin->bottom;
     else
-        boxRectangle.Top = (DrawInfo->Height - boxRectangle.Height) / sizeof(WCHAR);
+        boxRectangle.Top = (DrawInfo->Height - boxRectangle.Height) / (LONG)sizeof(WCHAR);
 
     // Calculate the text rectangle.
 
@@ -679,7 +681,7 @@ VOID PhDrawTrayIconText( // dmex
 
     if (DrawInfo->BackColor == 0)
     {
-        memset(bits, 0, numberOfPixels * 4);
+        memset(bits, 0, (size_t)numberOfPixels * 4);
     }
     else
     {
@@ -690,7 +692,7 @@ VOID PhDrawTrayIconText( // dmex
         DrawInfo->TextFont = PhpTrayIconFont();
 
     if (DrawInfo->TextFont)
-        oldFont = SelectObject(hdc, DrawInfo->TextFont);
+        oldFont = SelectFont(hdc, DrawInfo->TextFont);
 
     DrawInfo->Text = *Text;
     GetTextExtentPoint32(hdc, Text->Buffer, (ULONG)Text->Length / sizeof(WCHAR), &textSize);
@@ -699,8 +701,8 @@ VOID PhDrawTrayIconText( // dmex
 
     boxRectangle.Width = textSize.cx;
     boxRectangle.Height = textSize.cy;
-    boxRectangle.Left = (DrawInfo->Width - boxRectangle.Width) / sizeof(WCHAR);
-    boxRectangle.Top = (DrawInfo->Height - boxRectangle.Height) / sizeof(WCHAR);
+    boxRectangle.Left = (DrawInfo->Width - boxRectangle.Width) / (LONG)sizeof(WCHAR);
+    boxRectangle.Top = (DrawInfo->Height - boxRectangle.Height) / (LONG)sizeof(WCHAR);
 
     // Calculate the text rectangle.
 
@@ -713,18 +715,19 @@ VOID PhDrawTrayIconText( // dmex
     DrawInfo->TextRect = PhRectangleToRect(textRectangle);
     DrawInfo->TextBoxRect = PhRectangleToRect(boxRectangle);
 
+    SetBkMode(hdc, TRANSPARENT);
+
     // Fill in the text box.
     //SetDCBrushColor(hdc, DrawInfo->TextBoxColor);
-    //FillRect(hdc, &DrawInfo->TextBoxRect, GetStockObject(DC_BRUSH));
+    //FillRect(hdc, &DrawInfo->TextBoxRect, GetStockBrush(DC_BRUSH));
 
     // Draw the text.
     SetTextColor(hdc, DrawInfo->TextColor);
-    SetBkMode(hdc, TRANSPARENT);
 
     DrawText(hdc, DrawInfo->Text.Buffer, (ULONG)DrawInfo->Text.Length / sizeof(WCHAR), &DrawInfo->TextRect, DT_NOCLIP | DT_SINGLELINE);
 
     if (oldFont)
-        SelectObject(hdc, oldFont);
+        SelectFont(hdc, oldFont);
 }
 
 VOID PhpCreateGraphContext(
@@ -780,8 +783,8 @@ static VOID PhpDeleteBufferedContext(
     {
         // The original bitmap must be selected back into the context, otherwise the bitmap can't be
         // deleted.
-        SelectObject(Context->BufferedContext, Context->BufferedOldBitmap);
-        DeleteObject(Context->BufferedBitmap);
+        SelectBitmap(Context->BufferedContext, Context->BufferedOldBitmap);
+        DeleteBitmap(Context->BufferedBitmap);
         DeleteDC(Context->BufferedContext);
 
         Context->BufferedContext = NULL;
@@ -814,7 +817,7 @@ static VOID PhpCreateBufferedContext(
     Context->BufferedBitmap = CreateDIBSection(hdc, (BITMAPINFO *)&header, DIB_RGB_COLORS, &Context->BufferedBits, NULL, 0);
 
     ReleaseDC(Context->Handle, hdc);
-    Context->BufferedOldBitmap = SelectObject(Context->BufferedContext, Context->BufferedBitmap);
+    Context->BufferedOldBitmap = SelectBitmap(Context->BufferedContext, Context->BufferedBitmap);
 }
 
 static VOID PhpDeleteFadeOutContext(
@@ -823,8 +826,8 @@ static VOID PhpDeleteFadeOutContext(
 {
     if (Context->FadeOutContext)
     {
-        SelectObject(Context->FadeOutContext, Context->FadeOutOldBitmap);
-        DeleteObject(Context->FadeOutBitmap);
+        SelectBitmap(Context->FadeOutContext, Context->FadeOutOldBitmap);
+        DeleteBitmap(Context->FadeOutBitmap);
         DeleteDC(Context->FadeOutContext);
 
         Context->FadeOutContext = NULL;
@@ -866,7 +869,7 @@ static VOID PhpCreateFadeOutContext(
     Context->FadeOutBitmap = CreateDIBSection(hdc, (BITMAPINFO *)&header, DIB_RGB_COLORS, &Context->FadeOutBits, NULL, 0);
 
     ReleaseDC(Context->Handle, hdc);
-    Context->FadeOutOldBitmap = SelectObject(Context->FadeOutContext, Context->FadeOutBitmap);
+    Context->FadeOutOldBitmap = SelectBitmap(Context->FadeOutContext, Context->FadeOutBitmap);
 
     if (!Context->FadeOutBits)
         return;
@@ -929,19 +932,23 @@ VOID PhpDrawGraphControl(
         blendFunction.BlendFlags = 0;
         blendFunction.SourceConstantAlpha = 255;
         blendFunction.AlphaFormat = AC_SRC_ALPHA;
-        GdiAlphaBlend(
-            Context->BufferedContext,
-            0,
-            0,
-            Context->Options.FadeOutWidth,
-            Context->FadeOutContextRect.bottom,
-            Context->FadeOutContext,
-            0,
-            0,
-            Context->Options.FadeOutWidth,
-            Context->FadeOutContextRect.bottom,
-            blendFunction
-            );
+
+        if (Context->FadeOutContext)
+        {
+            GdiAlphaBlend(
+                Context->BufferedContext,
+                0,
+                0,
+                Context->Options.FadeOutWidth,
+                Context->FadeOutContextRect.bottom,
+                Context->FadeOutContext,
+                0,
+                0,
+                Context->Options.FadeOutWidth,
+                Context->FadeOutContextRect.bottom,
+                blendFunction
+                );
+        }
     }
 
     if (Context->Style & GC_STYLE_DRAW_PANEL)
@@ -1128,7 +1135,7 @@ LRESULT CALLBACK PhpGraphWndProc(
                     rect.right += 2;
                     rect.bottom += 2;
                     SetDCBrushColor(hdc, RGB(0x8f, 0x8f, 0x8f));
-                    FrameRect(hdc, &rect, GetStockObject(DC_BRUSH));
+                    FrameRect(hdc, &rect, GetStockBrush(DC_BRUSH));
 
                     ReleaseDC(hwnd, hdc);
                     return 0;
@@ -1296,6 +1303,12 @@ LRESULT CALLBACK PhpGraphWndProc(
                 SendMessage(context->TooltipHandle, TTM_SETDELAYTIME, TTDT_AUTOPOP, MAXSHORT);
                 // Allow newlines (-1 doesn't work)
                 SendMessage(context->TooltipHandle, TTM_SETMAXTIPWIDTH, 0, MAXSHORT);
+
+                if (PhGetIntegerSetting(L"EnableThemeSupport")) // HACK (dmex)
+                {
+                    PhSetControlTheme(context->TooltipHandle, L"DarkMode_Explorer");
+                    //SendMessage(context->TooltipHandle, TTM_SETWINDOWTHEME, 0, (LPARAM)L"DarkMode_Explorer");
+                }
             }
             else
             {

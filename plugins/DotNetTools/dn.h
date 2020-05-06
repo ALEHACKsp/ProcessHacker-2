@@ -2,7 +2,7 @@
  * Process Hacker .NET Tools
  *
  * Copyright (C) 2011-2015 wj32
- * Copyright (C) 2015-2016 dmex
+ * Copyright (C) 2015-2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -24,6 +24,7 @@
 #define DN_H
 
 #include <phdk.h>
+#include <workqueue.h>
 #include <settings.h>
 
 #include "resource.h"
@@ -66,17 +67,17 @@ PVOID GetPerfIpcBlock_V4(
     _In_ PVOID BlockTableAddress
     );
 
+_Success_(return)
 BOOLEAN OpenDotNetPublicControlBlock_V2(
     _In_ HANDLE ProcessId,
-    _Out_ HANDLE* BlockTableHandle,
     _Out_ PVOID* BlockTableAddress
     );
 
+_Success_(return)
 BOOLEAN OpenDotNetPublicControlBlock_V4(
     _In_ BOOLEAN IsImmersive,
     _In_ HANDLE ProcessHandle,
     _In_ HANDLE ProcessId,
-    _Out_ HANDLE* BlockTableHandle,
     _Out_ PVOID* BlockTableAddress
     );
 

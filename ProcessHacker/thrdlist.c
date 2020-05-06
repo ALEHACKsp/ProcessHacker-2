@@ -3,7 +3,7 @@
  *   thread list
  *
  * Copyright (C) 2011-2012 wj32
- * Copyright (C) 2018 dmex
+ * Copyright (C) 2018-2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -26,6 +26,7 @@
 
 #include <emenu.h>
 #include <settings.h>
+#include <symprv.h>
 
 #include <extmgri.h>
 #include <phplug.h>
@@ -113,7 +114,7 @@ VOID PhInitializeThreadList(
     PhAddTreeNewColumn(TreeNewHandle, PH_THREAD_TREELIST_COLUMN_USERTIME, FALSE, L"User time", 100, PH_ALIGN_LEFT, ULONG_MAX, 0);
     PhAddTreeNewColumn(TreeNewHandle, PH_THREAD_TREELIST_COLUMN_IDEALPROCESSOR, FALSE, L"Ideal processor", 80, PH_ALIGN_LEFT, ULONG_MAX, 0);
     PhAddTreeNewColumn(TreeNewHandle, PH_THREAD_TREELIST_COLUMN_CRITICAL, FALSE, L"Critical", 80, PH_ALIGN_LEFT, ULONG_MAX, 0);
-    PhAddTreeNewColumn(TreeNewHandle, PH_THREAD_TREELIST_COLUMN_TIDHEX, FALSE, L"TID (Hex)", 50, PH_ALIGN_RIGHT, 0, DT_RIGHT);
+    PhAddTreeNewColumn(TreeNewHandle, PH_THREAD_TREELIST_COLUMN_TIDHEX, FALSE, L"TID (Hex)", 50, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT);
 
     TreeNew_SetRedraw(TreeNewHandle, TRUE);
     TreeNew_SetTriState(TreeNewHandle, TRUE);
@@ -129,6 +130,8 @@ VOID PhDeleteThreadList(
     )
 {
     ULONG i;
+
+    PhDeleteTreeNewFilterSupport(&Context->TreeFilterSupport);
 
     PhCmDeleteManager(&Context->Cm);
 
@@ -169,7 +172,10 @@ VOID PhLoadSettingsThreadList(
 
     settings = PhGetStringSetting(L"ThreadTreeListColumns");
     sortSettings = PhGetStringSetting(L"ThreadTreeListSort");
+    Context->Flags = PhGetIntegerSetting(L"ThreadTreeListFlags");
+
     PhCmLoadSettingsEx(Context->TreeNewHandle, &Context->Cm, 0, &settings->sr, &sortSettings->sr);
+
     PhDereferenceObject(settings);
     PhDereferenceObject(sortSettings);
 
@@ -190,10 +196,35 @@ VOID PhSaveSettingsThreadList(
     PPH_STRING sortSettings;
 
     settings = PhCmSaveSettingsEx(Context->TreeNewHandle, &Context->Cm, 0, &sortSettings);
+
+    PhSetIntegerSetting(L"ThreadTreeListFlags", Context->Flags);
     PhSetStringSetting2(L"ThreadTreeListColumns", &settings->sr);
     PhSetStringSetting2(L"ThreadTreeListSort", &sortSettings->sr);
+
     PhDereferenceObject(settings);
     PhDereferenceObject(sortSettings);
+}
+
+VOID PhSetOptionsThreadList(
+    _Inout_ PPH_THREAD_LIST_CONTEXT Context,
+    _In_ ULONG Options
+    )
+{
+    switch (Options)
+    {
+    case PH_THREAD_TREELIST_MENUITEM_HIDE_SUSPENDED:
+        Context->HideSuspended = !Context->HideSuspended;
+        break;
+    case PH_THREAD_TREELIST_MENUITEM_HIDE_GUITHREADS:
+        Context->HideGuiThreads = !Context->HideGuiThreads;
+        break;
+    case PH_THREAD_TREELIST_MENUITEM_HIGHLIGHT_SUSPENDED:
+        Context->HighlightSuspended = !Context->HighlightSuspended;
+        break;
+    case PH_THREAD_TREELIST_MENUITEM_HIGHLIGHT_GUITHREADS:
+        Context->HighlightGuiThreads = !Context->HighlightGuiThreads;
+        break;
+    }
 }
 
 PPH_THREAD_NODE PhAddThreadNode(
@@ -314,7 +345,7 @@ VOID PhpRemoveThreadNode(
 
     // Remove from list and cleanup.
 
-    if ((index = PhFindItemList(Context->NodeList, ThreadNode)) != -1)
+    if ((index = PhFindItemList(Context->NodeList, ThreadNode)) != ULONG_MAX)
         PhRemoveItemList(Context->NodeList, index);
 
     PhpDestroyThreadNode(ThreadNode);
@@ -338,6 +369,24 @@ VOID PhTickThreadNodes(
     _In_ PPH_THREAD_LIST_CONTEXT Context
     )
 {
+    // Text invalidation, node updates
+
+    for (ULONG i = 0; i < Context->NodeList->Count; i++)
+    {
+        PPH_THREAD_NODE node = Context->NodeList->Items[i];
+
+        // The TID never changes, so we don't invalidate that.
+        memset(&node->TextCache[1], 0, sizeof(PH_STRINGREF) * (PH_THREAD_TREELIST_COLUMN_MAXIMUM - 1));
+        node->ValidMask = 0; // Items that always remain valid
+    }
+
+    if (Context->TreeNewSortOrder != NoSortOrder)
+    {
+        // Force a rebuild to sort the items.
+        TreeNew_NodesStructured(Context->TreeNewHandle);
+    }
+
+    // State highlighting
     PH_TICK_SH_STATE_TN(PH_THREAD_NODE, ShState, Context->NodeStateList, PhpRemoveThreadNode, PhCsHighlightingDuration, Context->TreeNewHandle, TRUE, NULL, Context);
 }
 
@@ -429,7 +478,7 @@ BEGIN_SORT_FUNCTION(Name)
 }
 END_SORT_FUNCTION
 
-BEGIN_SORT_FUNCTION(Started)
+BEGIN_SORT_FUNCTION(Created)
 {
     sortResult = uint64cmp(threadItem1->CreateTime.QuadPart, threadItem2->CreateTime.QuadPart);
 }
@@ -508,6 +557,13 @@ BEGIN_SORT_FUNCTION(Critical)
 }
 END_SORT_FUNCTION
 
+BEGIN_SORT_FUNCTION(TidHex)
+{
+    sortResult = uintptrcmp((ULONG_PTR)node1->ThreadId, (ULONG_PTR)node2->ThreadId);
+    //sortResult = ucharcmp(node1->ThreadIdHexText, node2->ThreadIdHexText, TRUE);
+}
+END_SORT_FUNCTION
+
 BOOLEAN NTAPI PhpThreadTreeNewCallback(
     _In_ HWND hwnd,
     _In_ PH_TREENEW_MESSAGE Message,
@@ -516,11 +572,11 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
     _In_opt_ PVOID Context
     )
 {
-    PPH_THREAD_LIST_CONTEXT context;
+    PPH_THREAD_LIST_CONTEXT context = Context;
     PPH_THREAD_NODE node;
 
-    context = Context;
-
+    if (!context)
+        return FALSE;
     if (PhCmForwardMessage(hwnd, Message, Parameter1, Parameter2, &context->Cm))
         return TRUE;
 
@@ -529,6 +585,9 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
     case TreeNewGetChildren:
         {
             PPH_TREENEW_GET_CHILDREN getChildren = Parameter1;
+
+            if (!getChildren)
+                break;
 
             if (!getChildren->Node)
             {
@@ -541,7 +600,7 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
                     SORT_FUNCTION(PrioritySymbolic),
                     SORT_FUNCTION(Service),
                     SORT_FUNCTION(Name),
-                    SORT_FUNCTION(Started),
+                    SORT_FUNCTION(Created),
                     SORT_FUNCTION(StartModule),
                     SORT_FUNCTION(ContextSwitches),
                     SORT_FUNCTION(Priority),
@@ -553,7 +612,8 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
                     SORT_FUNCTION(KernelTime),
                     SORT_FUNCTION(UserTime),
                     SORT_FUNCTION(IdealProcessor),
-                    SORT_FUNCTION(Critical)
+                    SORT_FUNCTION(Critical),
+                    SORT_FUNCTION(TidHex),
                 };
                 int (__cdecl *sortFunction)(void *, const void *, const void *);
 
@@ -589,6 +649,9 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
         {
             PPH_TREENEW_IS_LEAF isLeaf = Parameter1;
 
+            if (!isLeaf)
+                break;
+
             isLeaf->IsLeaf = TRUE;
         }
         return TRUE;
@@ -596,6 +659,9 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
         {
             PPH_TREENEW_GET_CELL_TEXT getCellText = Parameter1;
             PPH_THREAD_ITEM threadItem;
+
+            if (!getCellText)
+                break;
 
             node = (PPH_THREAD_NODE)getCellText->Node;
             threadItem = node->ThreadItem;
@@ -652,20 +718,22 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
                 }
                 break;
             case PH_THREAD_TREELIST_COLUMN_CYCLESDELTA:
-                if (context->UseCycleTime)
                 {
-                    if (threadItem->CyclesDelta.Delta != threadItem->CyclesDelta.Value && threadItem->CyclesDelta.Delta != 0)
+                    if (context->UseCycleTime)
                     {
-                        PhMoveReference(&node->CyclesDeltaText, PhFormatUInt64(threadItem->CyclesDelta.Delta, TRUE));
-                        getCellText->Text = node->CyclesDeltaText->sr;
+                        if (threadItem->CyclesDelta.Delta != threadItem->CyclesDelta.Value && threadItem->CyclesDelta.Delta != 0)
+                        {
+                            PhMoveReference(&node->CyclesDeltaText, PhFormatUInt64(threadItem->CyclesDelta.Delta, TRUE));
+                            getCellText->Text = node->CyclesDeltaText->sr;
+                        }
                     }
-                }
-                else
-                {
-                    if (threadItem->ContextSwitchesDelta.Delta != threadItem->ContextSwitchesDelta.Value && threadItem->ContextSwitchesDelta.Delta != 0)
+                    else
                     {
-                        PhMoveReference(&node->CyclesDeltaText, PhFormatUInt64(threadItem->ContextSwitchesDelta.Delta, TRUE));
-                        getCellText->Text = node->CyclesDeltaText->sr;
+                        if (threadItem->ContextSwitchesDelta.Delta != threadItem->ContextSwitchesDelta.Value && threadItem->ContextSwitchesDelta.Delta != 0)
+                        {
+                            PhMoveReference(&node->CyclesDeltaText, PhFormatUInt64(threadItem->ContextSwitchesDelta.Delta, TRUE));
+                            getCellText->Text = node->CyclesDeltaText->sr;
+                        }
                     }
                 }
                 break;
@@ -860,7 +928,7 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
                         if (NT_SUCCESS(PhGetThreadIdealProcessor(threadItem->ThreadHandle, &idealProcessorNumber)))
                         {
                             PhInitFormatU(&format[0], idealProcessorNumber.Group);
-                            PhInitFormatC(&format[1], ':');
+                            PhInitFormatC(&format[1], L':');
                             PhInitFormatU(&format[2], idealProcessorNumber.Number);
 
                             if (PhFormatToBuffer(format, 3, node->IdealProcessorText, sizeof(node->IdealProcessorText), &returnLength))
@@ -912,17 +980,22 @@ BOOLEAN NTAPI PhpThreadTreeNewCallback(
             PPH_TREENEW_GET_NODE_COLOR getNodeColor = Parameter1;
             PPH_THREAD_ITEM threadItem;
 
+            if (!getNodeColor)
+                break;
+
             node = (PPH_THREAD_NODE)getNodeColor->Node;
             threadItem = node->ThreadItem;
 
             if (!threadItem)
-                ; // Dummy
-            else if (PhCsUseColorSuspended && threadItem->WaitReason == Suspended)
+                NOTHING;
+            //else if (context->HighlightUnknownStartAddress && threadItem->StartAddressResolveLevel == PhsrlAddress)
+            //    getNodeColor->BackColor = PhCsColorUnknown;
+            else if (context->HighlightSuspended && threadItem->WaitReason == Suspended)
                 getNodeColor->BackColor = PhCsColorSuspended;
-            else if (PhCsUseColorGuiThreads && threadItem->IsGuiThread)
+            else if (context->HighlightGuiThreads && threadItem->IsGuiThread)
                 getNodeColor->BackColor = PhCsColorGuiThreads;
 
-            getNodeColor->Flags = TN_CACHE | TN_AUTO_FORECOLOR;
+            getNodeColor->Flags = TN_AUTO_FORECOLOR;
         }
         return TRUE;
     case TreeNewSortChanged:

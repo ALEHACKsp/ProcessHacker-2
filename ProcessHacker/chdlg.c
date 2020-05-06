@@ -22,6 +22,7 @@
 
 #include <phapp.h>
 #include <settings.h>
+#include <phsettings.h>
 
 typedef struct _CHOICE_DIALOG_CONTEXT
 {
@@ -167,7 +168,7 @@ INT_PTR CALLBACK PhpChoiceDlgProc(
                     {
                         PPH_STRING unescaped;
 
-                        unescaped = PhUnescapeStringForDelimiter(savedChoice, '\\');
+                        unescaped = PhUnescapeStringForDelimiter(savedChoice, L'\\');
                         ComboBox_InsertString(comboBoxHandle, -1, unescaped->Buffer);
                         PhDereferenceObject(unescaped);
                     }
@@ -259,6 +260,8 @@ INT_PTR CALLBACK PhpChoiceDlgProc(
                     SWP_NOACTIVATE | SWP_NOZORDER);
             }
 
+            PhInitializeWindowTheme(hwndDlg, PhEnableThemeSupport);
+
             PhSetDialogFocus(hwndDlg, comboBoxHandle);
         }
         break;
@@ -308,7 +311,7 @@ INT_PTR CALLBACK PhpChoiceDlgProc(
 
                         if (selectedChoice->Length != 0)
                         {
-                            escaped = PhEscapeStringForDelimiter(selectedChoice, '\\');
+                            escaped = PhEscapeStringForDelimiter(selectedChoice, L'\\');
                             PhAppendStringBuilder(&savedChoices, &escaped->sr);
                             PhDereferenceObject(escaped);
                             PhAppendStringBuilder2(&savedChoices, L"\\s");
@@ -330,7 +333,7 @@ INT_PTR CALLBACK PhpChoiceDlgProc(
                                 continue;
                             }
 
-                            escaped = PhEscapeStringForDelimiter(choice, '\\');
+                            escaped = PhEscapeStringForDelimiter(choice, L'\\');
                             PhAppendStringBuilder(&savedChoices, &escaped->sr);
                             PhDereferenceObject(escaped);
                             PhDereferenceObject(choice);

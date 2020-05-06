@@ -252,7 +252,7 @@ VOID CustomizeFreeToolbarItems(
             {
                 if (button->IconHandle)
                 {
-                    DeleteObject(button->IconHandle);
+                    DestroyIcon(button->IconHandle);
                 }
 
                 PhFree(button);
@@ -268,7 +268,7 @@ VOID CustomizeFreeToolbarItems(
             {
                 if (button->IconHandle)
                 {
-                    DeleteObject(button->IconHandle);
+                    DestroyIcon(button->IconHandle);
                 }
 
                 PhFree(button);
@@ -445,7 +445,7 @@ HICON CustomizeGetToolbarIcon(
     bitmapHandle = ToolbarGetImage(CommandID);
     iconHandle = CommonBitmapToIcon(bitmapHandle, Context->CXWidth, Context->CXWidth);
 
-    DeleteObject(bitmapHandle);
+    DeleteBitmap(bitmapHandle);
     return iconHandle;
 }
 
@@ -470,7 +470,7 @@ VOID CustomizeResetToolbarImages(
                     NULL
                     );
 
-                DeleteObject(bitmap);
+                DeleteBitmap(bitmap);
             }
         }
     }
@@ -487,7 +487,7 @@ INT_PTR CALLBACK CustomizeToolbarDialogProc(
 
     if (uMsg == WM_INITDIALOG)
     {
-        context = (PCUSTOMIZE_CONTEXT)PhAllocate(sizeof(CUSTOMIZE_CONTEXT));
+        context = PhAllocate(sizeof(CUSTOMIZE_CONTEXT));
         memset(context, 0, sizeof(CUSTOMIZE_CONTEXT));
 
         PhSetWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT, context);
@@ -495,12 +495,6 @@ INT_PTR CALLBACK CustomizeToolbarDialogProc(
     else
     {
         context = PhGetWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT);
-
-        if (uMsg == WM_NCDESTROY)
-        {
-            PhRemoveWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT);
-            PhFree(context);
-        }
     }
 
     if (context == NULL)
@@ -521,16 +515,31 @@ INT_PTR CALLBACK CustomizeToolbarDialogProc(
             context->RemoveButtonHandle = GetDlgItem(hwndDlg, IDC_REMOVE);
 
             context->CXWidth = PH_SCALE_DPI(16);
-            context->BrushNormal = GetSysColorBrush(COLOR_WINDOW);
-            context->BrushHot = CreateSolidBrush(RGB(145, 201, 247));
-            context->BrushPushed = CreateSolidBrush(RGB(153, 209, 255));
-            context->FontHandle = PhDuplicateFont((HFONT)SendMessage(ToolBarHandle, WM_GETFONT, 0, 0));
+
+            if (PhGetIntegerSetting(L"EnableThemeSupport"))
+            {
+                context->BrushNormal = CreateSolidBrush(RGB(43, 43, 43));
+                context->BrushHot = CreateSolidBrush(RGB(128, 128, 128));
+                context->BrushPushed = CreateSolidBrush(RGB(153, 209, 255));
+                context->TextColor = RGB(0xff, 0xff, 0xff);
+                context->FontHandle = PhDuplicateFont(GetWindowFont(ToolBarHandle));
+            }
+            else
+            {
+                context->BrushNormal = GetSysColorBrush(COLOR_WINDOW);
+                context->BrushHot = CreateSolidBrush(RGB(145, 201, 247));
+                context->BrushPushed = CreateSolidBrush(RGB(153, 209, 255));
+                context->TextColor = GetSysColor(COLOR_WINDOWTEXT);
+                context->FontHandle = PhDuplicateFont(GetWindowFont(ToolBarHandle));
+            }
 
             ListBox_SetItemHeight(context->AvailableListHandle, 0, context->CXWidth + 6); // BitmapHeight
             ListBox_SetItemHeight(context->CurrentListHandle, 0, context->CXWidth + 6); // BitmapHeight
 
             CustomizeLoadToolbarItems(context);
             CustomizeLoadToolbarSettings(context);
+
+            PhInitializeWindowTheme(hwndDlg, !!PhGetIntegerSetting(L"EnableThemeSupport"));
 
             PhSetDialogFocus(context->DialogHandle, context->CurrentListHandle);
         }
@@ -542,13 +551,19 @@ INT_PTR CALLBACK CustomizeToolbarDialogProc(
             CustomizeFreeToolbarItems(context);
 
             if (context->BrushHot)
-                DeleteObject(context->BrushHot);
+                DeleteBrush(context->BrushHot);
 
             if (context->BrushPushed)
-                DeleteObject(context->BrushPushed);
+                DeleteBrush(context->BrushPushed);
 
             if (context->FontHandle)
-                DeleteObject(context->FontHandle);
+                DeleteBrush(context->FontHandle);
+        }
+        break;
+    case WM_NCDESTROY:
+        {
+            PhRemoveWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT);
+            PhFree(context);
         }
         break;
     case WM_COMMAND:
@@ -863,7 +878,7 @@ INT_PTR CALLBACK CustomizeToolbarDialogProc(
 
                     if (!itemContext->IsVirtual)
                     {
-                        SetTextColor(bufferDc, GetSysColor(COLOR_WINDOWTEXT));
+                        SetTextColor(bufferDc, context->TextColor);
                     }
                     else
                     {
@@ -877,7 +892,7 @@ INT_PTR CALLBACK CustomizeToolbarDialogProc(
 
                     if (!itemContext->IsVirtual)
                     {
-                        SetTextColor(bufferDc, GetSysColor(COLOR_WINDOWTEXT));
+                        SetTextColor(bufferDc, context->TextColor);
                     }
                     else
                     {

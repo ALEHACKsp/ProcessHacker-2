@@ -77,10 +77,10 @@ HRESULT CALLBACK PhpElevateActionCallbackProc(
     return S_OK;
 }
 
+_Success_(return)
 BOOLEAN PhpShowElevatePrompt(
     _In_ HWND hWnd,
     _In_ PWSTR Message,
-    _In_ NTSTATUS Status,
     _Out_ PINT Button
     )
 {
@@ -95,7 +95,7 @@ BOOLEAN PhpShowElevatePrompt(
     config.hwndParent = hWnd;
     config.hInstance = PhInstanceHandle;
     config.dwFlags = IsWindowVisible(hWnd) ? TDF_POSITION_RELATIVE_TO_WINDOW : 0;
-    config.pszWindowTitle = L"Process Hacker";
+    config.pszWindowTitle = PhApplicationName;
     config.pszMainIcon = TD_ERROR_ICON;
     config.pszMainInstruction = PhaConcatStrings2(Message, L".")->Buffer;
     config.pszContent = L"You will need to provide administrator permission. "
@@ -111,12 +111,12 @@ BOOLEAN PhpShowElevatePrompt(
 
     config.pfCallback = PhpElevateActionCallbackProc;
 
-    if (TaskDialogIndirect(
+    if (SUCCEEDED(TaskDialogIndirect(
         &config,
         &button,
         NULL,
         NULL
-        ) == S_OK)
+        )))
     {
         *Button = button;
         return TRUE;
@@ -141,14 +141,16 @@ BOOLEAN PhpShowElevatePrompt(
  * \return TRUE if the user was prompted for elevation, otherwise
  * FALSE, in which case you need to show your own error message.
  */
+_Success_(return)
 BOOLEAN PhpShowErrorAndElevateAction(
     _In_ HWND hWnd,
     _In_ PWSTR Message,
     _In_ NTSTATUS Status,
     _In_ PWSTR Command,
-    _Out_ PBOOLEAN Success
+    _Out_opt_ PBOOLEAN Success
     )
 {
+    NTSTATUS status = STATUS_SUCCESS;
     PH_ACTION_ELEVATION_LEVEL elevationLevel;
     INT button = IDNO;
 
@@ -169,13 +171,12 @@ BOOLEAN PhpShowErrorAndElevateAction(
 
     if (elevationLevel == PromptElevateAction)
     {
-        if (!PhpShowElevatePrompt(hWnd, Message, Status, &button))
+        if (!PhpShowElevatePrompt(hWnd, Message, &button))
             return FALSE;
     }
 
     if (elevationLevel == AlwaysElevateAction || button == IDYES)
     {
-        NTSTATUS status;
         HANDLE processHandle;
         LARGE_INTEGER timeout;
         PROCESS_BASIC_INFORMATION basicInfo;
@@ -202,18 +203,13 @@ BOOLEAN PhpShowErrorAndElevateAction(
             }
 
             NtClose(processHandle);
-
-            if (NT_SUCCESS(status))
-            {
-                *Success = TRUE;
-            }
-            else
-            {
-                *Success = FALSE;
-                PhShowStatus(hWnd, Message, status, 0);
-            }
         }
     }
+
+    if (Success)
+        *Success = NT_SUCCESS(status);
+    if (!NT_SUCCESS(status))
+        PhShowStatus(hWnd, Message, status, 0);
 
     return TRUE;
 }
@@ -269,7 +265,7 @@ BOOLEAN PhpShowErrorAndConnectToPhSvc(
 
     if (elevationLevel == PromptElevateAction)
     {
-        if (!PhpShowElevatePrompt(hWnd, Message, Status, &button))
+        if (!PhpShowElevatePrompt(hWnd, Message, &button))
             return FALSE;
     }
 
@@ -362,11 +358,14 @@ BOOLEAN PhpStartPhSvcProcess(
             for (i = 0; i < RTL_NUMBER_OF(relativeFileNames); i++)
             {
                 PPH_STRING fileName;
+                PPH_STRING fileFullPath;
 
-                fileName = PhConcatStrings2(applicationDirectory->Buffer, relativeFileNames[i]);
-                PhMoveReference(&fileName, PhGetFullPath(fileName->Buffer, NULL));
+                fileName = PhConcatStringRefZ(&applicationDirectory->sr, relativeFileNames[i]);
 
-                if (fileName && RtlDoesFileExists_U(fileName->Buffer))
+                if (fileFullPath = PhGetFullPath(fileName->Buffer, NULL))
+                    PhMoveReference(&fileName, fileFullPath);
+
+                if (PhDoesFileExistsWin32(fileName->Buffer))
                 {
                     if (PhShellProcessHackerEx(
                         hWnd,
@@ -385,10 +384,10 @@ BOOLEAN PhpStartPhSvcProcess(
                     }
                 }
 
-                PhClearReference(&fileName);
+                PhDereferenceObject(fileName);
             }
 
-            PhClearReference(&applicationDirectory);
+            PhDereferenceObject(applicationDirectory);
         }
         break;
     }
@@ -431,7 +430,7 @@ BOOLEAN PhUiConnectToPhSvcEx(
     {
         PhAcquireQueuedLockExclusive(&PhSvcStartLock);
 
-        if (PhSvcReferenceCount == 0)
+        if (_InterlockedExchange(&PhSvcReferenceCount, 0) == 0)
         {
             started = FALSE;
             PhpGetPhSvcPortName(Mode, &portName);
@@ -520,7 +519,7 @@ BOOLEAN PhUiLockComputer(
     if (LockWorkStation())
         return TRUE;
     else
-        PhShowStatus(hWnd, L"Unable to lock the computer", 0, GetLastError());
+        PhShowStatus(hWnd, L"Unable to lock the computer.", 0, GetLastError());
 
     return FALSE;
 }
@@ -532,7 +531,7 @@ BOOLEAN PhUiLogoffComputer(
     if (ExitWindowsEx(EWX_LOGOFF, 0))
         return TRUE;
     else
-        PhShowStatus(hWnd, L"Unable to log off the computer", 0, GetLastError());
+        PhShowStatus(hWnd, L"Unable to log off the computer.", 0, GetLastError());
 
     return FALSE;
 }
@@ -551,7 +550,7 @@ BOOLEAN PhUiSleepComputer(
         )))
         return TRUE;
     else
-        PhShowStatus(hWnd, L"Unable to sleep the computer", status, 0);
+        PhShowStatus(hWnd, L"Unable to sleep the computer.", status, 0);
 
     return FALSE;
 }
@@ -570,7 +569,7 @@ BOOLEAN PhUiHibernateComputer(
         )))
         return TRUE;
     else
-        PhShowStatus(hWnd, L"Unable to hibernate the computer", status, 0);
+        PhShowStatus(hWnd, L"Unable to hibernate the computer.", status, 0);
 
     return FALSE;
 }
@@ -580,6 +579,12 @@ BOOLEAN PhUiRestartComputer(
     _In_ ULONG Flags
     )
 {
+    ULONG status;
+    BOOLEAN forceShutdown;
+
+    // Force shutdown when holding the control key. (dmex)
+    forceShutdown = !!(GetKeyState(VK_CONTROL) < 0);
+
     if (!PhGetIntegerSetting(L"EnableWarnings") || PhShowConfirmMessage(
         hWnd,
         L"restart",
@@ -588,10 +593,35 @@ BOOLEAN PhUiRestartComputer(
         FALSE
         ))
     {
-        if (ExitWindowsEx(EWX_REBOOT | Flags, 0))
-            return TRUE;
+        if (forceShutdown)
+        {
+            status = NtShutdownSystem(ShutdownReboot);
+
+            if (NT_SUCCESS(status))
+                return TRUE;
+
+            PhShowStatus(hWnd, L"Unable to restart the computer.", status, 0);
+        }
         else
-            PhShowStatus(hWnd, L"Unable to restart the computer", 0, GetLastError());
+        {
+            status = InitiateShutdown(
+                NULL,
+                NULL,
+                0,
+                SHUTDOWN_RESTART | Flags,
+                SHTDN_REASON_FLAG_PLANNED
+                );
+
+            if (status == ERROR_SUCCESS)
+                return TRUE;
+
+            PhShowStatus(hWnd, L"Unable to restart the computer.", 0, status);
+
+            //if (ExitWindowsEx(EWX_REBOOT | EWX_BOOTOPTIONS, 0))
+            //    return TRUE;
+            //else
+            //    PhShowStatus(hWnd, L"Unable to restart the computer.", 0, GetLastError());
+        }
     }
 
     return FALSE;
@@ -602,6 +632,12 @@ BOOLEAN PhUiShutdownComputer(
     _In_ ULONG Flags
     )
 {
+    ULONG status;
+    BOOLEAN forceShutdown;
+
+    // Force shutdown when holding the control key. (dmex)
+    forceShutdown = !!(GetKeyState(VK_CONTROL) < 0);
+
     if (!PhGetIntegerSetting(L"EnableWarnings") || PhShowConfirmMessage(
         hWnd,
         L"shut down",
@@ -610,17 +646,36 @@ BOOLEAN PhUiShutdownComputer(
         FALSE
         ))
     {
-        if (ExitWindowsEx(EWX_POWEROFF | Flags, 0))
+        if (forceShutdown)
         {
-            return TRUE;
-        }
-        else if (ExitWindowsEx(EWX_SHUTDOWN | Flags, 0))
-        {
-            return TRUE;
+            status = NtShutdownSystem(ShutdownPowerOff);
+
+            if (!NT_SUCCESS(status))
+            {
+                PhShowStatus(hWnd, L"Unable to shut down the computer.", status, 0);
+            }
         }
         else
         {
-            PhShowStatus(hWnd, L"Unable to shut down the computer.", 0, GetLastError());
+            status = InitiateShutdown(
+                NULL,
+                NULL,
+                0,
+                SHUTDOWN_POWEROFF | Flags,
+                SHTDN_REASON_FLAG_PLANNED
+                );
+
+            if (status == ERROR_SUCCESS)
+                return TRUE;
+
+            PhShowStatus(hWnd, L"Unable to shut down the computer.", 0, status);
+
+            //if (ExitWindowsEx(EWX_POWEROFF | EWX_HYBRID_SHUTDOWN, 0))
+            //    return TRUE;
+            //else if (ExitWindowsEx(EWX_SHUTDOWN | EWX_HYBRID_SHUTDOWN, 0))
+            //    return TRUE;
+            //else
+            //    PhShowStatus(hWnd, L"Unable to shut down the computer.", 0, GetLastError());
         }
     }
 
@@ -637,7 +692,7 @@ BOOLEAN PhUiConnectSession(
     PPH_STRING oldSelectedChoice = NULL;
 
     // Try once with no password.
-    if (WinStationConnectW(NULL, SessionId, -1, L"", TRUE))
+    if (WinStationConnectW(NULL, SessionId, LOGONID_CURRENT, L"", TRUE))
         return TRUE;
 
     while (PhaChoiceDialog(
@@ -661,7 +716,7 @@ BOOLEAN PhUiConnectSession(
 
         oldSelectedChoice = selectedChoice;
 
-        if (WinStationConnectW(NULL, SessionId, -1, selectedChoice->Buffer, TRUE))
+        if (WinStationConnectW(NULL, SessionId, LOGONID_CURRENT, selectedChoice->Buffer, TRUE))
         {
             success = TRUE;
             break;
@@ -1383,7 +1438,7 @@ BOOLEAN PhUiRestartProcess(
     // Start the process.
 
     status = PhCreateProcessWin32(
-        PhGetString(Process->FileName), // we didn't wait for S1 processing
+        PhGetString(Process->FileNameWin32), // we didn't wait for S1 processing
         commandLine->Buffer,
         NULL,
         currentDirectory->Buffer,
@@ -1458,8 +1513,8 @@ BOOLEAN PhUiDebugProcess(
     {
         if (debugger = PH_AUTO(PhQueryRegistryString(keyHandle, L"Debugger")))
         {
-            if (PhSplitStringRefAtChar(&debugger->sr, '"', &dummy, &commandPart) &&
-                PhSplitStringRefAtChar(&commandPart, '"', &commandPart, &dummy))
+            if (PhSplitStringRefAtChar(&debugger->sr, L'"', &dummy, &commandPart) &&
+                PhSplitStringRefAtChar(&commandPart, L'"', &commandPart, &dummy))
             {
                 DebuggerCommand = PhCreateString2(&commandPart);
             }
@@ -1476,9 +1531,9 @@ BOOLEAN PhUiDebugProcess(
 
     PhInitializeStringBuilder(&commandLineBuilder, DebuggerCommand->Length + 30);
 
-    PhAppendCharStringBuilder(&commandLineBuilder, '"');
+    PhAppendCharStringBuilder(&commandLineBuilder, L'"');
     PhAppendStringBuilder(&commandLineBuilder, &DebuggerCommand->sr);
-    PhAppendCharStringBuilder(&commandLineBuilder, '"');
+    PhAppendCharStringBuilder(&commandLineBuilder, L'"');
     PhAppendFormatStringBuilder(&commandLineBuilder, L" -p %lu", HandleToUlong(Process->ProcessId));
 
     status = PhCreateProcessWin32(
@@ -1682,19 +1737,14 @@ BOOLEAN PhUiDetachFromDebuggerProcess(
             &debugObjectHandle
             )))
         {
-            ULONG killProcessOnExit;
-
             // Disable kill-on-close.
-            killProcessOnExit = 0;
-            NtSetInformationDebugObject(
+            if (NT_SUCCESS(status = PhSetDebugKillProcessOnExit(
                 debugObjectHandle,
-                DebugObjectKillProcessOnExitInformation,
-                &killProcessOnExit,
-                sizeof(ULONG),
-                NULL
-                );
-
-            status = NtRemoveProcessDebug(processHandle, debugObjectHandle);
+                FALSE
+                )))
+            {
+                status = NtRemoveProcessDebug(processHandle, debugObjectHandle);
+            }
 
             NtClose(debugObjectHandle);
         }
@@ -2593,6 +2643,49 @@ BOOLEAN PhUiResumeThreads(
     return success;
 }
 
+BOOLEAN PhUiSetPriorityThreads(
+    _In_ HWND WindowHandle,
+    _In_ PPH_THREAD_ITEM *Threads,
+    _In_ ULONG NumberOfThreads,
+    _In_ LONG Increment
+    )
+{
+    BOOLEAN success = TRUE;
+    ULONG i;
+
+    // Special saturation values
+    if (Increment == THREAD_PRIORITY_TIME_CRITICAL)
+        Increment = THREAD_BASE_PRIORITY_LOWRT + 1;
+    else if (Increment == THREAD_PRIORITY_IDLE)
+        Increment = THREAD_BASE_PRIORITY_IDLE - 1;
+
+    for (i = 0; i < NumberOfThreads; i++)
+    {
+        NTSTATUS status;
+        HANDLE threadHandle;
+
+        if (NT_SUCCESS(status = PhOpenThread(
+            &threadHandle,
+            THREAD_SET_LIMITED_INFORMATION,
+            Threads[i]->ThreadId
+            )))
+        {
+            status = PhSetThreadBasePriority(threadHandle, Increment);
+            NtClose(threadHandle);
+
+            if (!NT_SUCCESS(status))
+            {
+                success = FALSE;
+
+                if (!PhpShowErrorThread(WindowHandle, L"change priority of", Threads[i], status, 0))
+                    break;
+            }
+        }
+    }
+
+    return success;
+}
+
 BOOLEAN PhUiSetPriorityThread(
     _In_ HWND hWnd,
     _In_ PPH_THREAD_ITEM Thread,
@@ -2601,12 +2694,6 @@ BOOLEAN PhUiSetPriorityThread(
 {
     NTSTATUS status;
     HANDLE threadHandle;
-
-    // Special saturation values
-    if (Increment == THREAD_PRIORITY_TIME_CRITICAL)
-        Increment = THREAD_BASE_PRIORITY_LOWRT + 1;
-    else if (Increment == THREAD_PRIORITY_IDLE)
-        Increment = THREAD_BASE_PRIORITY_IDLE - 1;
 
     if (NT_SUCCESS(status = PhOpenThread(
         &threadHandle,
@@ -2869,7 +2956,7 @@ BOOLEAN PhUiUnloadModule(
         {
             PhShowStatus(
                 hWnd,
-                PhaFormatString(L"Unable to unmap the section view at 0x%Ix", Module->BaseAddress)->Buffer,
+                PhaFormatString(L"Unable to unmap the section view at 0x%p", Module->BaseAddress)->Buffer,
                 status,
                 0
                 );
@@ -3006,15 +3093,19 @@ static BOOLEAN PhpShowErrorHandle(
     _In_opt_ ULONG Win32Result
     )
 {
+    WCHAR value[PH_PTR_STR_LEN_1];
+
+    PhPrintPointer(value, (PVOID)Handle->Handle);
+
     if (!PhIsNullOrEmptyString(Handle->BestObjectName))
     {
         return PhShowContinueStatus(
             hWnd,
             PhaFormatString(
-            L"Unable to %s handle \"%s\" (0x%Ix)",
+            L"Unable to %s handle \"%s\" (%s)",
             Verb,
             Handle->BestObjectName->Buffer,
-            HandleToUlong(Handle->Handle)
+            value
             )->Buffer,
             Status,
             Win32Result
@@ -3025,9 +3116,9 @@ static BOOLEAN PhpShowErrorHandle(
         return PhShowContinueStatus(
             hWnd,
             PhaFormatString(
-            L"Unable to %s handle 0x%Ix",
+            L"Unable to %s handle %s",
             Verb,
-            HandleToUlong(Handle->Handle)
+            value
             )->Buffer,
             Status,
             Win32Result

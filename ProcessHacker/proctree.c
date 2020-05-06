@@ -3,7 +3,7 @@
  *   process tree list
  *
  * Copyright (C) 2010-2016 wj32
- * Copyright (C) 2016-2019 dmex
+ * Copyright (C) 2016-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -427,37 +427,6 @@ PPH_PROCESS_NODE PhAddProcessNode(
         );
     PhAddItemList(ProcessNodeList, processNode);
 
-    if (PhCsCollapseServicesOnStart)
-    {
-        static PH_STRINGREF servicesBaseName = PH_STRINGREF_INIT(L"\\services.exe");
-        static BOOLEAN servicesFound = FALSE;
-        static PPH_STRING servicesFileName = NULL;
-
-        if (!servicesFound)
-        {
-            if (!servicesFileName)
-            {
-                PPH_STRING systemDirectory;
-
-                systemDirectory = PhGetSystemDirectory();
-                servicesFileName = PhConcatStringRef2(&systemDirectory->sr, &servicesBaseName);
-                PhDereferenceObject(systemDirectory);
-            }
-
-            // If this process is services.exe, collapse the node and free the string.
-            if (
-                ProcessItem->FileName &&
-                PhEqualString(ProcessItem->FileName, servicesFileName, TRUE)
-                )
-            {
-                processNode->Node.Expanded = FALSE;
-                PhDereferenceObject(servicesFileName);
-                servicesFileName = NULL;
-                servicesFound = TRUE;
-            }
-        }
-    }
-
     if (PhEnableCycleCpuUsage && ProcessItem->ProcessId == INTERRUPTS_PROCESS_ID)
         PhInitializeStringRef(&processNode->DescriptionText, L"Interrupts and DPCs");
 
@@ -604,7 +573,6 @@ VOID PhpRemoveProcessNode(
     PhClearReference(&ProcessNode->SubprocessCountText);
     PhClearReference(&ProcessNode->ProtectionText);
     PhClearReference(&ProcessNode->DesktopInfoText);
-    PhClearReference(&ProcessNode->UserName);
 
     PhDeleteGraphBuffers(&ProcessNode->CpuGraphBuffers);
     PhDeleteGraphBuffers(&ProcessNode->PrivateGraphBuffers);
@@ -623,11 +591,7 @@ VOID PhUpdateProcessNode(
 {
     memset(ProcessNode->TextCache, 0, sizeof(PH_STRINGREF) * PHPRTLC_MAXIMUM);
 
-    if (ProcessNode->TooltipText)
-    {
-        PhDereferenceObject(ProcessNode->TooltipText);
-        ProcessNode->TooltipText = NULL;
-    }
+    PhClearReference(&ProcessNode->TooltipText);
 
     PhInvalidateTreeNewNode(&ProcessNode->Node, TN_CACHE_COLOR | TN_CACHE_ICON);
     TreeNew_InvalidateNode(ProcessTreeListHandle, &ProcessNode->Node);
@@ -650,7 +614,7 @@ VOID PhTickProcessNodes(
 
         // The name and PID never change, so we don't invalidate that.
         memset(&node->TextCache[2], 0, sizeof(PH_STRINGREF) * (PHPRTLC_MAXIMUM - 2));
-        node->ValidMask &= PHPN_OSCONTEXT | PHPN_IMAGE | PHPN_DPIAWARENESS | PHPN_APPID | PHPN_DESKTOPINFO | PHPN_USERNAME; // Items that always remain valid
+        node->ValidMask &= PHPN_OSCONTEXT | PHPN_IMAGE | PHPN_DPIAWARENESS | PHPN_APPID | PHPN_DESKTOPINFO; // Items that always remain valid
 
         // The DPI awareness defaults to unaware if not set or declared in the manifest in which case
         // it can be changed once, so we can only be sure that it won't be changed again if it is different
@@ -706,8 +670,8 @@ static VOID PhpNeedGraphContext(
     {
         // The original bitmap must be selected back into the context, otherwise
         // the bitmap can't be deleted.
-        SelectObject(GraphContext, GraphBitmap);
-        DeleteObject(GraphBitmap);
+        SelectBitmap(GraphContext, GraphBitmap);
+        DeleteBitmap(GraphBitmap);
         DeleteDC(GraphContext);
 
         GraphContext = NULL;
@@ -724,9 +688,10 @@ static VOID PhpNeedGraphContext(
     header.biPlanes = 1;
     header.biBitCount = 32;
     GraphBitmap = CreateDIBSection(hdc, (BITMAPINFO *)&header, DIB_RGB_COLORS, &GraphBits, NULL, 0);
-    GraphOldBitmap = SelectObject(GraphContext, GraphBitmap);
+    GraphOldBitmap = SelectBitmap(GraphContext, GraphBitmap);
 }
 
+_Success_(return)
 static BOOLEAN PhpFormatInt32GroupDigits(
     _In_ ULONG Value,
     _Out_writes_bytes_(BufferLength) PWCHAR Buffer,
@@ -838,21 +803,6 @@ static VOID PhpAggregateFieldIfNeeded(
     }
 }
 
-static VOID PhpUpdateProcessNodeUserName(
-    _Inout_ PPH_PROCESS_NODE ProcessNode
-    )
-{
-    if (!(ProcessNode->ValidMask & PHPN_USERNAME))
-    {
-        if (ProcessNode->ProcessItem->Sid)
-        {
-            PhMoveReference(&ProcessNode->UserName, PhGetSidFullName(ProcessNode->ProcessItem->Sid, TRUE, NULL));
-        }
-
-        ProcessNode->ValidMask |= PHPN_USERNAME;
-    }
-}
-
 static VOID PhpUpdateProcessNodeWsCounters(
     _Inout_ PPH_PROCESS_NODE ProcessNode
     )
@@ -932,11 +882,7 @@ static VOID PhpUpdateProcessNodeWindow(
     {
         PhClearReference(&ProcessNode->WindowText);
 
-        if (ProcessNode->ProcessItem->IsSubsystemProcess)
-        {
-            NOTHING;
-        }
-        else
+        if (ProcessNode->ProcessItem->QueryHandle && !ProcessNode->ProcessItem->IsSubsystemProcess)
         {
             ProcessNode->WindowHandle = PhGetProcessMainWindow(
                 ProcessNode->ProcessId,
@@ -945,7 +891,12 @@ static VOID PhpUpdateProcessNodeWindow(
 
             if (ProcessNode->WindowHandle)
             {
-                PhGetWindowTextEx(ProcessNode->WindowHandle, PH_GET_WINDOW_TEXT_INTERNAL, &ProcessNode->WindowText);
+                PhGetWindowTextEx(
+                    ProcessNode->WindowHandle,
+                    PH_GET_WINDOW_TEXT_INTERNAL,
+                    &ProcessNode->WindowText
+                    );
+
                 ProcessNode->WindowHung = !!IsHungAppWindow(ProcessNode->WindowHandle);
             }
         }
@@ -1421,7 +1372,7 @@ END_SORT_FUNCTION
 
 BEGIN_SORT_FUNCTION(UserName)
 {
-    sortResult = PhCompareStringWithNull(node1->UserName, node2->UserName, TRUE);
+    sortResult = PhCompareStringWithNull(processItem1->UserName, processItem2->UserName, TRUE);
 }
 END_SORT_FUNCTION
 
@@ -2256,8 +2207,7 @@ BOOLEAN NTAPI PhpProcessTreeNewCallback(
                 }
                 break;
             case PHPRTLC_USERNAME:
-                PhpUpdateProcessNodeUserName(node);
-                getCellText->Text = PhGetStringRef(node->UserName);
+                getCellText->Text = PhGetStringRef(processItem->UserName);
                 break;
             case PHPRTLC_DESCRIPTION:
                 if (processItem->VersionInfo.FileDescription)
@@ -2272,7 +2222,7 @@ BOOLEAN NTAPI PhpProcessTreeNewCallback(
                 getCellText->Text = PhGetStringRef(processItem->VersionInfo.FileVersion);
                 break;
             case PHPRTLC_FILENAME:
-                getCellText->Text = PhGetStringRef(processItem->FileName);
+                getCellText->Text = PhGetStringRef(processItem->FileNameWin32);
                 break;
             case PHPRTLC_COMMANDLINE:
                 getCellText->Text = PhGetStringRef(processItem->CommandLine);
@@ -2807,11 +2757,11 @@ BOOLEAN NTAPI PhpProcessTreeNewCallback(
 
                         if (delta > 0)
                         {
-                            PhInitFormatC(&format[0], '+');
+                            PhInitFormatC(&format[0], L'+');
                         }
                         else
                         {
-                            PhInitFormatC(&format[0], '-');
+                            PhInitFormatC(&format[0], L'-');
                             delta = -delta;
                         }
 
@@ -3433,6 +3383,10 @@ VOID PhGetSelectedProcessItems(
     {
         PPH_PROCESS_NODE node = ProcessNodeList->Items[i];
 
+        // HACK workaround issue with multiple select->search->termination and Searchbox->PhApplyTreeNewFilters (dmex)
+        if (!node->Node.Visible)
+            continue;
+
         if (node->Node.Selected)
             PhAddItemArray(&array, &node->ProcessItem);
     }
@@ -3590,7 +3544,7 @@ VOID PhpPopulateTableWithProcessNodes(
                 NULL,
                 getCellText.Text.Length + Level * sizeof(WCHAR) * sizeof(WCHAR)
                 );
-            wmemset(text->Buffer, ' ', Level * sizeof(WCHAR));
+            wmemset(text->Buffer, L' ', Level * sizeof(WCHAR));
             memcpy(&text->Buffer[Level * sizeof(WCHAR)], getCellText.Text.Buffer, getCellText.Text.Length);
         }
 

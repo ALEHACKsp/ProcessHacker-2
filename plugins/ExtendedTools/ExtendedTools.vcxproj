@@ -23,28 +23,32 @@
     <RootNamespace>ExtendedTools</RootNamespace>
     <Keyword>Win32Proj</Keyword>
     <ProjectName>ExtendedTools</ProjectName>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
+    <SpectreMitigation>false</SpectreMitigation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
+    <SpectreMitigation>false</SpectreMitigation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
+    <SpectreMitigation>false</SpectreMitigation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
+    <SpectreMitigation>false</SpectreMitigation>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="PropertySheets">
@@ -53,29 +57,30 @@
   </ImportGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Link>
-      <AdditionalDependencies>cfgmgr32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>advapi32.dll;comctl32.dll;cfgmgr32.dll;gdi32.dll;ole32.dll;oleaut32.dll;user32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <AdditionalDependencies>cfgmgr32.lib;pdh.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>advapi32.dll;comctl32.dll;cfgmgr32.dll;gdi32.dll;pdh.dll;oleaut32.dll;user32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Link>
-      <AdditionalDependencies>cfgmgr32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>advapi32.dll;comctl32.dll;cfgmgr32.dll;gdi32.dll;ole32.dll;oleaut32.dll;user32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <AdditionalDependencies>cfgmgr32.lib;pdh.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>advapi32.dll;comctl32.dll;cfgmgr32.dll;gdi32.dll;pdh.dll;oleaut32.dll;user32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Link>
-      <AdditionalDependencies>cfgmgr32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>advapi32.dll;comctl32.dll;cfgmgr32.dll;gdi32.dll;ole32.dll;oleaut32.dll;user32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <AdditionalDependencies>cfgmgr32.lib;pdh.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>advapi32.dll;comctl32.dll;cfgmgr32.dll;gdi32.dll;pdh.dll;oleaut32.dll;user32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Link>
-      <AdditionalDependencies>cfgmgr32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>advapi32.dll;comctl32.dll;cfgmgr32.dll;gdi32.dll;ole32.dll;oleaut32.dll;user32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <AdditionalDependencies>cfgmgr32.lib;pdh.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>advapi32.dll;comctl32.dll;cfgmgr32.dll;gdi32.dll;pdh.dll;oleaut32.dll;user32.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="counters.c" />
     <ClCompile Include="disktab.c" />
     <ClCompile Include="etwdisk.c" />
     <ClCompile Include="etwmini.c" />
@@ -87,7 +92,6 @@
     <ClCompile Include="gpuprprp.c" />
     <ClCompile Include="gpusys.c" />
     <ClCompile Include="iconext.c" />
-    <ClCompile Include="procicon.c" />
     <ClCompile Include="svcext.c" />
     <ClCompile Include="treeext.c" />
     <ClCompile Include="etwstat.c" />

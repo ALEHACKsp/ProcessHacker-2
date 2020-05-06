@@ -3,6 +3,7 @@
  *   base support functions
  *
  * Copyright (C) 2009-2016 wj32
+ * Copyright (C) 2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -201,6 +202,7 @@ NTSTATUS PhpBaseThreadStart(
     result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
     // Call the user-supplied function.
+
     status = context.StartAddress(context.Parameter);
 
     // De-initialization code
@@ -250,11 +252,12 @@ HANDLE PhCreateThread(
         &threadHandle,
         NULL
         );
-    
+
     // NOTE: PhCreateThread previously used CreateThread with callers using GetLastError()
     // for checking errors. We need to preserve this behavior for compatibility -dmex
     // TODO: Migrate code over to PhCreateThreadEx and remove this function.
-    RtlSetLastWin32ErrorAndNtStatusFromNtStatus(status);
+    //RtlSetLastWin32ErrorAndNtStatusFromNtStatus(status);
+    SetLastError(RtlNtStatusToDosError(status));
 
     if (NT_SUCCESS(status))
     {
@@ -422,6 +425,24 @@ VOID PhLocalTimeToSystemTime(
     SystemTime->QuadPart = LocalTime->QuadPart + timeZoneBias.QuadPart;
 }
 
+NTSTATUS PhDelayExecution(
+    _In_ LONGLONG Interval
+    )
+{
+    if (Interval == INFINITE) // HACK (dmex)
+    {
+        return NtDelayExecution(FALSE, NULL);
+    }
+    else
+    {
+        LARGE_INTEGER interval;
+
+        interval.QuadPart = -(LONGLONG)UInt32x32To64(Interval, PH_TIMEOUT_MS);
+
+        return NtDelayExecution(FALSE, &interval);
+    }
+}
+
 /**
  * Allocates a block of memory.
  *
@@ -535,6 +556,7 @@ PVOID PhReAllocateSafe(
  */
 _Check_return_
 _Ret_maybenull_
+_Success_(return != NULL)
 PVOID PhAllocatePage(
     _In_ SIZE_T Size,
     _Out_opt_ PSIZE_T NewSize
@@ -570,7 +592,7 @@ PVOID PhAllocatePage(
  * \param Memory A pointer to a block of memory.
  */
 VOID PhFreePage(
-    _Frees_ptr_opt_ PVOID Memory
+    _Post_invalid_ PVOID Memory
     )
 {
     SIZE_T size;
@@ -594,6 +616,7 @@ SIZE_T PhCountStringZ(
     _In_ PWSTR String
     )
 {
+#ifndef _ARM64_
     if (PhpVectorLevel >= PH_VECTOR_LEVEL_SSE2)
     {
         PWSTR p;
@@ -632,6 +655,7 @@ SIZE_T PhCountStringZ(
         }
     }
     else
+#endif
     {
         return wcslen(String);
     }
@@ -700,7 +724,7 @@ PWSTR PhDuplicateStringZ(
     PWSTR newString;
     SIZE_T length;
 
-    length = (PhCountStringZ(String) + sizeof(UNICODE_NULL)) * sizeof(WCHAR); // include the null terminator
+    length = PhCountStringZ(String) * sizeof(WCHAR) + sizeof(UNICODE_NULL); // include the null terminator
 
     newString = PhAllocate(length);
     memcpy(newString, String, length);
@@ -726,6 +750,7 @@ PWSTR PhDuplicateStringZ(
  * string. It will also stop copying when it reaches the character count specified in \a InputCount,
  * if \a InputCount is not -1.
  */
+_Success_(return)
 BOOLEAN PhCopyBytesZ(
     _In_ PSTR InputBuffer,
     _In_ SIZE_T InputCount,
@@ -788,6 +813,7 @@ BOOLEAN PhCopyBytesZ(
  * string. It will also stop copying when it reaches the character count specified in \a InputCount,
  * if \a InputCount is not -1.
  */
+_Success_(return)
 BOOLEAN PhCopyStringZ(
     _In_ PWSTR InputBuffer,
     _In_ SIZE_T InputCount,
@@ -850,6 +876,7 @@ BOOLEAN PhCopyStringZ(
  * string. It will also stop copying when it reaches the character count specified in \a InputCount,
  * if \a InputCount is not -1.
  */
+_Success_(return)
 BOOLEAN PhCopyStringZFromBytes(
     _In_ PSTR InputBuffer,
     _In_ SIZE_T InputCount,
@@ -912,6 +939,7 @@ BOOLEAN PhCopyStringZFromBytes(
  * string. It will also stop copying when it reaches the character count specified in \a InputCount,
  * if \a InputCount is not -1.
  */
+_Success_(return)
 BOOLEAN PhCopyStringZFromMultiByte(
     _In_ PSTR InputBuffer,
     _In_ SIZE_T InputCount,
@@ -1271,6 +1299,7 @@ BOOLEAN PhEqualStringRef(
     s1 = String1->Buffer;
     s2 = String2->Buffer;
 
+#ifndef _ARM64_
     if (PhpVectorLevel >= PH_VECTOR_LEVEL_SSE2)
     {
         length = l1 / 16;
@@ -1310,6 +1339,7 @@ BOOLEAN PhEqualStringRef(
         l1 = (l1 & 15) / sizeof(WCHAR);
     }
     else
+#endif
     {
         length = l1 / sizeof(ULONG_PTR);
 
@@ -1407,6 +1437,7 @@ ULONG_PTR PhFindCharInStringRef(
 
     if (!IgnoreCase)
     {
+#ifndef _ARM64_
         if (PhpVectorLevel >= PH_VECTOR_LEVEL_SSE2)
         {
             SIZE_T length16;
@@ -1435,6 +1466,12 @@ ULONG_PTR PhFindCharInStringRef(
                     buffer += 16 / sizeof(WCHAR);
                 } while (--length16 != 0);
             }
+        }
+        else
+#endif
+        {
+            if (buffer)
+                wcschr(buffer, Character);
         }
 
         if (length != 0)
@@ -1493,6 +1530,7 @@ ULONG_PTR PhFindLastCharInStringRef(
 
     if (!IgnoreCase)
     {
+#ifndef _ARM64_
         if (PhpVectorLevel >= PH_VECTOR_LEVEL_SSE2)
         {
             SIZE_T length16;
@@ -1524,6 +1562,12 @@ ULONG_PTR PhFindLastCharInStringRef(
 
                 buffer += 16 / sizeof(WCHAR);
             }
+        }
+        else
+#endif
+        {
+            if (buffer)
+                wcsrchr(buffer, Character);
         }
 
         if (length != 0)
@@ -2448,7 +2492,7 @@ PPH_STRING PhFormatString_V(
     )
 {
     PPH_STRING string;
-    int length;
+    INT length;
 
     length = _vscwprintf(Format, ArgPtr);
 
@@ -2533,6 +2577,7 @@ BOOLEAN PhWriteUnicodeDecoder(
     }
 }
 
+_Success_(return)
 BOOLEAN PhpReadUnicodeDecoder(
     _Inout_ PPH_UNICODE_DECODER Decoder,
     _Out_ PULONG CodeUnit
@@ -2620,6 +2665,7 @@ BOOLEAN PhpDecodeUtf8Error(
     return TRUE;
 }
 
+_Success_(return)
 BOOLEAN PhDecodeUnicodeDecoder(
     _Inout_ PPH_UNICODE_DECODER Decoder,
     _Out_ PULONG CodePoint
@@ -2817,6 +2863,7 @@ BOOLEAN PhDecodeUnicodeDecoder(
     }
 }
 
+_Success_(return)
 BOOLEAN PhEncodeUnicode(
     _In_ UCHAR Encoding,
     _In_ ULONG CodePoint,
@@ -3130,12 +3177,14 @@ PPH_BYTES PhConvertUtf16ToMultiByteEx(
     return bytes;
 }
 
+_Success_(return)
 BOOLEAN PhConvertUtf8ToUtf16Size(
     _Out_ PSIZE_T BytesInUtf16String,
     _In_reads_bytes_(BytesInUtf8String) PCH Utf8String,
     _In_ SIZE_T BytesInUtf8String
     )
 {
+#ifdef PH_UTF_NATIVE
     BOOLEAN result;
     PH_UNICODE_DECODER decoder;
     PCH in;
@@ -3168,8 +3217,27 @@ BOOLEAN PhConvertUtf8ToUtf16Size(
     *BytesInUtf16String = bytesInUtf16String;
 
     return result;
+#else
+    ULONG bytesInUtf16String = 0;
+
+    if (NT_SUCCESS(RtlUTF8ToUnicodeN(
+        NULL,
+        0,
+        &bytesInUtf16String,
+        Utf8String,
+        (ULONG)BytesInUtf8String
+        )))
+    {
+        if (BytesInUtf16String)
+            *BytesInUtf16String = bytesInUtf16String;
+        return TRUE;
+    }
+
+    return FALSE;
+#endif
 }
 
+_Success_(return)
 BOOLEAN PhConvertUtf8ToUtf16Buffer(
     _Out_writes_bytes_to_(MaxBytesInUtf16String, *BytesInUtf16String) PWCH Utf16String,
     _In_ SIZE_T MaxBytesInUtf16String,
@@ -3178,6 +3246,7 @@ BOOLEAN PhConvertUtf8ToUtf16Buffer(
     _In_ SIZE_T BytesInUtf8String
     )
 {
+#ifdef PH_UTF_NATIVE
     BOOLEAN result;
     PH_UNICODE_DECODER decoder;
     PCH in;
@@ -3234,6 +3303,24 @@ BOOLEAN PhConvertUtf8ToUtf16Buffer(
         *BytesInUtf16String = bytesInUtf16String;
 
     return result;
+#else
+    ULONG bytesInUtf16String = 0;
+
+    if (NT_SUCCESS(RtlUTF8ToUnicodeN(
+        Utf16String,
+        (ULONG)MaxBytesInUtf16String,
+        &bytesInUtf16String,
+        Utf8String,
+        (ULONG)BytesInUtf8String
+        )))
+    {
+        if (BytesInUtf16String)
+            *BytesInUtf16String = bytesInUtf16String;
+        return TRUE;
+    }
+
+    return FALSE;
+#endif
 }
 
 PPH_STRING PhConvertUtf8ToUtf16(
@@ -3280,12 +3367,14 @@ PPH_STRING PhConvertUtf8ToUtf16Ex(
     return string;
 }
 
+_Success_(return)
 BOOLEAN PhConvertUtf16ToUtf8Size(
     _Out_ PSIZE_T BytesInUtf8String,
     _In_reads_bytes_(BytesInUtf16String) PWCH Utf16String,
     _In_ SIZE_T BytesInUtf16String
     )
 {
+#ifdef PH_UTF_NATIVE
     BOOLEAN result;
     PH_UNICODE_DECODER decoder;
     PWCH in;
@@ -3318,8 +3407,27 @@ BOOLEAN PhConvertUtf16ToUtf8Size(
     *BytesInUtf8String = bytesInUtf8String;
 
     return result;
+#else
+    ULONG bytesInUtf8String = 0;
+
+    if (NT_SUCCESS(RtlUnicodeToUTF8N(
+        NULL,
+        0,
+        &bytesInUtf8String,
+        Utf16String,
+        (ULONG)BytesInUtf16String
+        )))
+    {
+        if (BytesInUtf8String)
+            *BytesInUtf8String = bytesInUtf8String;
+        return TRUE;
+    }
+
+    return FALSE;
+#endif
 }
 
+_Success_(return)
 BOOLEAN PhConvertUtf16ToUtf8Buffer(
     _Out_writes_bytes_to_(MaxBytesInUtf8String, *BytesInUtf8String) PCH Utf8String,
     _In_ SIZE_T MaxBytesInUtf8String,
@@ -3328,6 +3436,7 @@ BOOLEAN PhConvertUtf16ToUtf8Buffer(
     _In_ SIZE_T BytesInUtf16String
     )
 {
+#ifdef PH_UTF_NATIVE
     BOOLEAN result;
     PH_UNICODE_DECODER decoder;
     PWCH in;
@@ -3388,6 +3497,24 @@ BOOLEAN PhConvertUtf16ToUtf8Buffer(
         *BytesInUtf8String = bytesInUtf8String;
 
     return result;
+#else
+    ULONG bytesInUtf8String = 0;
+
+    if (NT_SUCCESS(RtlUnicodeToUTF8N(
+        Utf8String,
+        (ULONG)MaxBytesInUtf8String,
+        &bytesInUtf8String,
+        Utf16String,
+        (ULONG)BytesInUtf16String
+        )))
+    {
+        if (BytesInUtf8String)
+            *BytesInUtf8String = bytesInUtf8String;
+        return TRUE;
+    }
+
+    return FALSE;
+#endif
 }
 
 PPH_BYTES PhConvertUtf16ToUtf8(
@@ -3688,7 +3815,7 @@ VOID PhAppendFormatStringBuilder_V(
     _In_ va_list ArgPtr
     )
 {
-    int length;
+    INT length;
     SIZE_T lengthInBytes;
 
     length = _vscwprintf(Format, ArgPtr);
@@ -4311,7 +4438,7 @@ ULONG PhFindItemList(
             return i;
     }
 
-    return -1;
+    return ULONG_MAX;
 }
 
 /**
@@ -4530,6 +4657,7 @@ HANDLE PhAddItemPointerList(
     return PhpPointerListIndexToHandle(index);
 }
 
+_Success_(return)
 BOOLEAN PhEnumPointerListEx(
     _In_ PPH_POINTER_LIST PointerList,
     _Inout_ PULONG EnumerationKey,
@@ -4687,7 +4815,7 @@ PPH_HASHTABLE PhCreateHashtable(
     hashtable->Entries = PhAllocate(PH_HASHTABLE_ENTRY_SIZE(EntrySize) * hashtable->AllocatedEntries);
 
     hashtable->Count = 0;
-    hashtable->FreeEntry = -1;
+    hashtable->FreeEntry = ULONG_MAX;
     hashtable->NextEntry = 0;
 
     return hashtable;
@@ -4733,7 +4861,7 @@ VOID PhpResizeHashtable(
 
     for (i = 0; i < Hashtable->NextEntry; i++)
     {
-        if (entry->HashCode != -1)
+        if (entry->HashCode != ULONG_MAX)
         {
             ULONG index = PhpIndexFromHash(Hashtable, entry->HashCode);
 
@@ -4764,7 +4892,7 @@ FORCEINLINE PVOID PhpAddEntryHashtable(
     {
         ULONG i;
 
-        for (i = Hashtable->Buckets[index]; i != -1; i = entry->Next)
+        for (i = Hashtable->Buckets[index]; i != ULONG_MAX; i = entry->Next)
         {
             entry = PH_HASHTABLE_GET_ENTRY(Hashtable, i);
 
@@ -4779,7 +4907,7 @@ FORCEINLINE PVOID PhpAddEntryHashtable(
     }
 
     // Use a free entry if possible.
-    if (Hashtable->FreeEntry != -1)
+    if (Hashtable->FreeEntry != ULONG_MAX)
     {
         freeEntry = Hashtable->FreeEntry;
         entry = PH_HASHTABLE_GET_ENTRY(Hashtable, freeEntry);
@@ -4878,7 +5006,7 @@ VOID PhClearHashtable(
     {
         memset(Hashtable->Buckets, 0xff, sizeof(ULONG) * Hashtable->AllocatedBuckets);
         Hashtable->Count = 0;
-        Hashtable->FreeEntry = -1;
+        Hashtable->FreeEntry = ULONG_MAX;
         Hashtable->NextEntry = 0;
     }
 }
@@ -4897,6 +5025,7 @@ VOID PhClearHashtable(
  * this function). Otherwise, the function may behave unexpectedly. You may reset the
  * \a EnumerationKey variable to 0 if you wish to restart the enumeration.
  */
+_Success_(return)
 BOOLEAN PhEnumHashtable(
     _In_ PPH_HASHTABLE Hashtable,
     _Out_ PVOID *Entry,
@@ -4909,7 +5038,7 @@ BOOLEAN PhEnumHashtable(
 
         (*EnumerationKey)++;
 
-        if (entry->HashCode != -1)
+        if (entry->HashCode != ULONG_MAX)
         {
             *Entry = &entry->Body;
             return TRUE;
@@ -4944,7 +5073,7 @@ PVOID PhFindEntryHashtable(
     hashCode = PhpValidateHash(Hashtable->HashFunction(Entry));
     index = PhpIndexFromHash(Hashtable, hashCode);
 
-    for (i = Hashtable->Buckets[index]; i != -1; i = entry->Next)
+    for (i = Hashtable->Buckets[index]; i != ULONG_MAX; i = entry->Next)
     {
         entry = PH_HASHTABLE_GET_ENTRY(Hashtable, i);
 
@@ -4981,16 +5110,16 @@ BOOLEAN PhRemoveEntryHashtable(
 
     hashCode = PhpValidateHash(Hashtable->HashFunction(Entry));
     index = PhpIndexFromHash(Hashtable, hashCode);
-    previousIndex = -1;
+    previousIndex = ULONG_MAX;
 
-    for (i = Hashtable->Buckets[index]; i != -1; i = entry->Next)
+    for (i = Hashtable->Buckets[index]; i != ULONG_MAX; i = entry->Next)
     {
         entry = PH_HASHTABLE_GET_ENTRY(Hashtable, i);
 
         if (entry->HashCode == hashCode && Hashtable->EqualFunction(&entry->Body, Entry))
         {
             // Unlink the entry from the bucket.
-            if (previousIndex == -1)
+            if (previousIndex == ULONG_MAX)
             {
                 Hashtable->Buckets[index] = entry->Next;
             }
@@ -4999,7 +5128,7 @@ BOOLEAN PhRemoveEntryHashtable(
                 PH_HASHTABLE_GET_ENTRY(Hashtable, previousIndex)->Next = entry->Next;
             }
 
-            entry->HashCode = -1; // indicates the entry is not being used
+            entry->HashCode = ULONG_MAX; // indicates the entry is not being used
             entry->Next = Hashtable->FreeEntry;
             Hashtable->FreeEntry = i;
 
@@ -5380,9 +5509,7 @@ VOID PhInvokeCallback(
 
     PhAcquireQueuedLockShared(&Callback->ListLock);
 
-    listEntry = Callback->ListHead.Flink;
-
-    while (listEntry != &Callback->ListHead)
+    for (listEntry = Callback->ListHead.Flink; listEntry != &Callback->ListHead; listEntry = listEntry->Flink)
     {
         PPH_CALLBACK_REGISTRATION registration;
         LONG busy;
@@ -5412,8 +5539,6 @@ VOID PhInvokeCallback(
             // wake them.
             PhPulseAllCondition(&Callback->BusyCondition);
         }
-
-        listEntry = listEntry->Flink;
     }
 
     PhReleaseQueuedLockShared(&Callback->ListLock);
@@ -5616,7 +5741,7 @@ PPH_STRING PhBufferToHexStringEx(
     else
         table = PhIntegerToChar;
 
-    string = PhCreateStringEx(NULL, Length * 2 * sizeof(WCHAR));
+    string = PhCreateStringEx(NULL, Length * sizeof(WCHAR) * 2);
 
     for (i = 0; i < Length; i++)
     {
@@ -5685,6 +5810,7 @@ BOOLEAN PhpStringToInteger64(
  *
  * If there is no recognized prefix, base 10 is used.
  */
+_Success_(return)
 BOOLEAN PhStringToInteger64(
     _In_ PPH_STRINGREF String,
     _In_opt_ ULONG Base,
@@ -5703,9 +5829,9 @@ BOOLEAN PhStringToInteger64(
     string = *String;
     negative = FALSE;
 
-    if (string.Length != 0 && (string.Buffer[0] == '-' || string.Buffer[0] == '+'))
+    if (string.Length != 0 && (string.Buffer[0] == L'-' || string.Buffer[0] == L'+'))
     {
-        if (string.Buffer[0] == '-')
+        if (string.Buffer[0] == L'-')
             negative = TRUE;
 
         PhSkipStringRef(&string, sizeof(WCHAR));
@@ -5721,36 +5847,36 @@ BOOLEAN PhStringToInteger64(
     {
         base = 10;
 
-        if (string.Length >= 2 * sizeof(WCHAR) && string.Buffer[0] == '0')
+        if (string.Length >= 2 * sizeof(WCHAR) && string.Buffer[0] == L'0')
         {
             switch (string.Buffer[1])
             {
-            case 'x':
-            case 'X':
+            case L'x':
+            case L'X':
                 base = 16;
                 break;
-            case 'o':
-            case 'O':
+            case L'o':
+            case L'O':
                 base = 8;
                 break;
-            case 'b':
-            case 'B':
+            case L'b':
+            case L'B':
                 base = 2;
                 break;
-            case 't': // ternary
-            case 'T':
+            case L't': // ternary
+            case L'T':
                 base = 3;
                 break;
-            case 'q': // quaternary
-            case 'Q':
+            case L'q': // quaternary
+            case L'Q':
                 base = 4;
                 break;
-            case 'w': // base 12
-            case 'W':
+            case L'w': // base 12
+            case L'W':
                 base = 12;
                 break;
-            case 'r': // base 32
-            case 'R':
+            case L'r': // base 32
+            case L'R':
                 base = 32;
                 break;
             }
@@ -5787,7 +5913,7 @@ BOOLEAN PhpStringToDouble(
 
     for (i = 0; i < length; i++)
     {
-        if (String->Buffer[i] == '.')
+        if (String->Buffer[i] == L'.')
         {
             if (!dotSeen)
                 dotSeen = TRUE;
@@ -5845,9 +5971,9 @@ BOOLEAN PhStringToDouble(
     string = *String;
     negative = FALSE;
 
-    if (string.Length != 0 && (string.Buffer[0] == '-' || string.Buffer[0] == '+'))
+    if (string.Length != 0 && (string.Buffer[0] == L'-' || string.Buffer[0] == L'+'))
     {
-        if (string.Buffer[0] == '-')
+        if (string.Buffer[0] == L'-')
             negative = TRUE;
 
         PhSkipStringRef(&string, sizeof(WCHAR));
@@ -5902,41 +6028,74 @@ VOID PhPrintTimeSpan(
     _In_opt_ ULONG Mode
     )
 {
+    PhPrintTimeSpanToBuffer(
+        Ticks,
+        Mode,
+        Destination,
+        PH_TIMESPAN_STR_LEN,
+        NULL
+        );
+}
+
+BOOLEAN PhPrintTimeSpanToBuffer(
+    _In_ ULONG64 Ticks,
+    _In_opt_ ULONG Mode,
+    _Out_writes_bytes_(BufferLength) PWSTR Buffer,
+    _In_ SIZE_T BufferLength,
+    _Out_opt_ PSIZE_T ReturnLength
+    )
+{
     switch (Mode)
     {
     case PH_TIMESPAN_HMSM:
-        _snwprintf(
-            Destination,
-            PH_TIMESPAN_STR_LEN,
-            L"%02I64u:%02I64u:%02I64u.%03I64u",
-            PH_TICKS_PARTIAL_HOURS(Ticks),
-            PH_TICKS_PARTIAL_MIN(Ticks),
-            PH_TICKS_PARTIAL_SEC(Ticks),
-            PH_TICKS_PARTIAL_MS(Ticks)
-            );
+        {
+            PH_FORMAT format[7];
+
+            // %02I64u:%02I64u:%02I64u.%03I64u
+            PhInitFormatI64UWithWidth(&format[0], PH_TICKS_PARTIAL_HOURS(Ticks), 2);
+            PhInitFormatC(&format[1], L':');
+            PhInitFormatI64UWithWidth(&format[2], PH_TICKS_PARTIAL_MIN(Ticks), 2);
+            PhInitFormatC(&format[3], L':');
+            PhInitFormatI64UWithWidth(&format[4], PH_TICKS_PARTIAL_SEC(Ticks), 2);
+            PhInitFormatC(&format[5], L'.');
+            PhInitFormatI64UWithWidth(&format[6], PH_TICKS_PARTIAL_MS(Ticks), 3);
+
+            return PhFormatToBuffer(format, RTL_NUMBER_OF(format), Buffer, BufferLength, ReturnLength);
+        }
         break;
     case PH_TIMESPAN_DHMS:
-        _snwprintf(
-            Destination,
-            PH_TIMESPAN_STR_LEN,
-            L"%I64u:%02I64u:%02I64u:%02I64u",
-            PH_TICKS_PARTIAL_DAYS(Ticks),
-            PH_TICKS_PARTIAL_HOURS(Ticks),
-            PH_TICKS_PARTIAL_MIN(Ticks),
-            PH_TICKS_PARTIAL_SEC(Ticks)
-            );
+        {
+            PH_FORMAT format[7];
+
+            // %I64u:%02I64u:%02I64u:%02I64u
+            PhInitFormatI64U(&format[0], PH_TICKS_PARTIAL_DAYS(Ticks));
+            PhInitFormatC(&format[1], L':');
+            PhInitFormatI64UWithWidth(&format[2], PH_TICKS_PARTIAL_HOURS(Ticks), 2);
+            PhInitFormatC(&format[3], L':');
+            PhInitFormatI64UWithWidth(&format[4], PH_TICKS_PARTIAL_MIN(Ticks), 2);
+            PhInitFormatC(&format[5], L':');
+            PhInitFormatI64UWithWidth(&format[6], PH_TICKS_PARTIAL_SEC(Ticks), 2);
+
+            return PhFormatToBuffer(format, RTL_NUMBER_OF(format), Buffer, BufferLength, ReturnLength);
+        }
         break;
     default:
-        _snwprintf(
-            Destination,
-            PH_TIMESPAN_STR_LEN,
-            L"%02I64u:%02I64u:%02I64u",
-            PH_TICKS_PARTIAL_HOURS(Ticks),
-            PH_TICKS_PARTIAL_MIN(Ticks),
-            PH_TICKS_PARTIAL_SEC(Ticks)
-            );
+        {
+            PH_FORMAT format[5];
+
+            // %02I64u:%02I64u:%02I64u
+            PhInitFormatI64UWithWidth(&format[0], PH_TICKS_PARTIAL_HOURS(Ticks), 2);
+            PhInitFormatC(&format[1], L':');
+            PhInitFormatI64UWithWidth(&format[2], PH_TICKS_PARTIAL_MIN(Ticks), 2);
+            PhInitFormatC(&format[3], L'.');
+            PhInitFormatI64UWithWidth(&format[4], PH_TICKS_PARTIAL_SEC(Ticks), 2);
+
+            return PhFormatToBuffer(format, RTL_NUMBER_OF(format), Buffer, BufferLength, ReturnLength);
+        }
         break;
     }
+
+    return FALSE;
 }
 
 /**
@@ -5952,6 +6111,15 @@ VOID PhFillMemoryUlong(
     _In_ SIZE_T Count
     )
 {
+#ifdef _ARM64_
+    if (Count != 0)
+    {
+        do
+        {
+            *Memory++ = Value;
+        } while (--Count != 0);
+    }
+#else
     __m128i pattern;
     SIZE_T count;
 
@@ -6020,6 +6188,7 @@ VOID PhFillMemoryUlong(
         *Memory++ = Value;
         break;
     }
+#endif
 }
 
 /**
@@ -6035,6 +6204,10 @@ VOID PhDivideSinglesBySingle(
     _In_ SIZE_T Count
     )
 {
+#ifdef _ARM64_
+    while (Count--)
+        *A++ /= B;
+#else
     PFLOAT endA;
     __m128 b;
 
@@ -6104,4 +6277,5 @@ VOID PhDivideSinglesBySingle(
         *A++ /= B;
         break;
     }
+#endif
 }

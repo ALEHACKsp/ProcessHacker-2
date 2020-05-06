@@ -29,10 +29,12 @@ BOOLEAN NTAPI PhpWslDistributionNamesCallback(
     _In_opt_ PVOID Context
     )
 {
-    PhAddItemList(Context, PhCreateStringEx(Information->Name, Information->NameLength));
+    if (Context)
+        PhAddItemList(Context, PhCreateStringEx(Information->Name, Information->NameLength));
     return TRUE;
 }
 
+_Success_(return)
 BOOLEAN PhGetWslDistributionFromPath(
     _In_ PPH_STRING FileName,
     _Out_opt_ PPH_STRING *LxssDistroName,
@@ -58,7 +60,7 @@ BOOLEAN PhGetWslDistributionFromPath(
         PPH_LIST distributionGuidList;
 
         distributionGuidList = PhCreateList(1);
-        PhEnumerateKey(keyHandle, PhpWslDistributionNamesCallback, distributionGuidList);
+        PhEnumerateKey(keyHandle, KeyBasicInformation, PhpWslDistributionNamesCallback, distributionGuidList);
 
         for (i = 0; i < distributionGuidList->Count; i++)
         {
@@ -139,8 +141,9 @@ BOOLEAN PhGetWslDistributionFromPath(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN PhInitializeLxssImageVersionInfo(
-    _Out_ PPH_IMAGE_VERSION_INFO ImageVersionInfo,
+    _Inout_ PPH_IMAGE_VERSION_INFO ImageVersionInfo,
     _In_ PPH_STRING FileName
     )
 {
@@ -150,10 +153,7 @@ BOOLEAN PhInitializeLxssImageVersionInfo(
     PPH_STRING lxssDistroName;
     PPH_STRING lxssDistroPath;
     PPH_STRING lxssFileName;
-    PPH_STRING lxssBaseFileName;
     PPH_STRING result;
-
-    lxssBaseFileName = PhGetBaseName(FileName);
 
     if (!PhGetWslDistributionFromPath(
         FileName,
@@ -165,13 +165,17 @@ BOOLEAN PhInitializeLxssImageVersionInfo(
         return FALSE;
     }
 
-    if (PhIsNullOrEmptyString(lxssDistroName) || PhIsNullOrEmptyString(lxssFileName) || PhIsNullOrEmptyString(lxssBaseFileName))
+    if (PhIsNullOrEmptyString(lxssDistroName) || PhIsNullOrEmptyString(lxssDistroPath) || PhIsNullOrEmptyString(lxssFileName))
     {
         if (lxssDistroName) PhDereferenceObject(lxssDistroName);
         if (lxssDistroPath) PhDereferenceObject(lxssDistroPath);
         if (lxssFileName) PhDereferenceObject(lxssFileName);
-        if (lxssBaseFileName) PhDereferenceObject(lxssBaseFileName);
         return FALSE;
+    }
+
+    if (PhEqualString2(lxssFileName, L"/init", FALSE))
+    {
+        PhMoveReference(&lxssFileName, PhCreateString(L"init"));
     }
 
     PhMoveReference(&lxssCommandLine, PhFormatString(
@@ -191,8 +195,8 @@ BOOLEAN PhInitializeLxssImageVersionInfo(
         goto ParseResult;
     }
 
-    PhMoveReference(&lxssCommandLine, PhFormatString(
-        L"dpkg -S %s",
+    PhMoveReference(&lxssCommandLine, PhConcatStrings2(
+        L"dpkg -S ",
         lxssFileName->Buffer
         ));
 
@@ -207,8 +211,8 @@ BOOLEAN PhInitializeLxssImageVersionInfo(
     {
         PhDereferenceObject(lxssCommandLine);
         PhDereferenceObject(lxssDistroName);
+        PhDereferenceObject(lxssDistroPath);
         PhDereferenceObject(lxssFileName);
-        PhDereferenceObject(lxssBaseFileName);
         return FALSE;
     }
     else
@@ -216,7 +220,7 @@ BOOLEAN PhInitializeLxssImageVersionInfo(
         PH_STRINGREF remainingPart;
         PH_STRINGREF packagePart;
 
-        if (PhSplitStringRefAtChar(&result->sr, ':', &packagePart, &remainingPart))
+        if (PhSplitStringRefAtChar(&result->sr, L':', &packagePart, &remainingPart))
         {
             lxssPackageName = PhCreateString2(&packagePart);
         }
@@ -224,17 +228,17 @@ BOOLEAN PhInitializeLxssImageVersionInfo(
         PhDereferenceObject(result);
     }
 
-    if (!lxssPackageName)
+    if (PhIsNullOrEmptyString(lxssPackageName))
     {
         PhDereferenceObject(lxssCommandLine);
         PhDereferenceObject(lxssDistroName);
+        PhDereferenceObject(lxssDistroPath);
         PhDereferenceObject(lxssFileName);
-        PhDereferenceObject(lxssBaseFileName);
         return FALSE;
     }
 
-    PhMoveReference(&lxssCommandLine, PhFormatString(
-        L"dpkg-query -W -f=${Version}|${Maintainer}|${binary:Summary} %s",
+    PhMoveReference(&lxssCommandLine, PhConcatStrings2(
+        L"dpkg-query -W -f=${Version}|${Maintainer}|${binary:Summary} ",
         lxssPackageName->Buffer
         ));
 
@@ -249,8 +253,8 @@ BOOLEAN PhInitializeLxssImageVersionInfo(
     {
         PhDereferenceObject(lxssCommandLine);
         PhDereferenceObject(lxssDistroName);
+        PhDereferenceObject(lxssDistroPath);
         PhDereferenceObject(lxssFileName);
-        PhDereferenceObject(lxssBaseFileName);
         return FALSE;
     }
 
@@ -267,9 +271,9 @@ ParseResult:
         PH_STRINGREF versionPart;
 
         remainingPart = PhGetStringRef(result);
-        PhSplitStringRefAtChar(&remainingPart, '|', &versionPart, &remainingPart);
-        PhSplitStringRefAtChar(&remainingPart, '|', &companyPart, &remainingPart);
-        PhSplitStringRefAtChar(&remainingPart, '|', &descriptionPart, &remainingPart);
+        PhSplitStringRefAtChar(&remainingPart, L'|', &versionPart, &remainingPart);
+        PhSplitStringRefAtChar(&remainingPart, L'|', &companyPart, &remainingPart);
+        PhSplitStringRefAtChar(&remainingPart, L'|', &descriptionPart, &remainingPart);
 
         if (versionPart.Length != 0)
             ImageVersionInfo->FileVersion = PhCreateString2(&versionPart);
@@ -283,8 +287,8 @@ ParseResult:
     if (lxssCommandLine) PhDereferenceObject(lxssCommandLine);
     if (lxssPackageName) PhDereferenceObject(lxssPackageName);
     if (lxssDistroName) PhDereferenceObject(lxssDistroName);
+    if (lxssDistroPath) PhDereferenceObject(lxssDistroPath);
     if (lxssFileName) PhDereferenceObject(lxssFileName);
-    if (lxssBaseFileName) PhDereferenceObject(lxssBaseFileName);
 
     return TRUE;
 }
@@ -383,7 +387,7 @@ ULONG PhCreateProcessLxss(
     NtClose(outputWriteHandle);
 
     // Read the pipe data. (dmex)
-    lxssOutputString = PhGetFileText(outputReadHandle);
+    lxssOutputString = PhGetFileText(outputReadHandle, TRUE);
 
     // Get the exit code after we finish reading the data from the pipe. (dmex)
     if (NT_SUCCESS(status = PhGetProcessBasicInformation(processHandle, &basicInfo)))
@@ -392,7 +396,7 @@ ULONG PhCreateProcessLxss(
     }
 
     // Note: Don't use NTSTATUS now that we have the lxss exit code. (dmex)
-    if (status == 0)
+    if (Result && status == 0)
     {
         *Result = lxssOutputString;
     }

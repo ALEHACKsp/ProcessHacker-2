@@ -91,6 +91,7 @@ typedef union _PH_KNOWN_PROCESS_COMMAND_LINE
 } PH_KNOWN_PROCESS_COMMAND_LINE, *PPH_KNOWN_PROCESS_COMMAND_LINE;
 
 PHAPPAPI
+_Success_(return)
 BOOLEAN
 NTAPI
 PhaGetProcessKnownCommandLine(
@@ -211,6 +212,13 @@ PhGetPhVersionNumbers(
     _Out_opt_ PULONG MinorVersion,
     _Out_opt_ PULONG BuildNumber,
     _Out_opt_ PULONG RevisionNumber
+    );
+
+PHAPPAPI
+PPH_STRING
+NTAPI
+PhGetPhVersionHash(
+    VOID
     );
 
 PHAPPAPI
@@ -430,6 +438,19 @@ PPH_STRING PhPcre2GetErrorMessage(
 
 HBITMAP PhGetShieldBitmap(
     VOID
+    );
+
+HRESULT PhRunAsAdminTask(
+    _In_ PWSTR TaskName
+    );
+
+HRESULT PhDeleteAdminTask(
+    _In_ PWSTR TaskName
+    );
+
+HRESULT PhCreateAdminTask(
+    _In_ PWSTR TaskName,
+    _In_ PWSTR FileName
     );
 
 #define PH_LOAD_SHARED_ICON_SMALL(BaseAddress, Name) PhLoadIcon(BaseAddress, (Name), PH_LOAD_ICON_SHARED | PH_LOAD_ICON_SIZE_SMALL, 0, 0) // phapppub

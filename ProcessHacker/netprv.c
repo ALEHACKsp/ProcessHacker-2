@@ -24,10 +24,12 @@
 
 #include <phapp.h>
 #include <phplug.h>
+#include <phsettings.h>
 #include <netprv.h>
 #include <svcsup.h>
 #include <workqueue.h>
 
+#include <apiimport.h>
 #include <extmgri.h>
 #include <procprv.h>
 
@@ -281,152 +283,222 @@ PPHP_RESOLVE_CACHE_ITEM PhpLookupResolveCacheItem(
         return NULL;
 }
 
-PPH_STRING PhGetHostNameFromAddress(
+//PPH_STRING PhGetHostNameFromAddress(
+//    _In_ PPH_IP_ADDRESS Address
+//    )
+//{
+//    SOCKADDR_IN ipv4Address;
+//    SOCKADDR_IN6 ipv6Address;
+//    PSOCKADDR address;
+//    socklen_t length;
+//    PPH_STRING hostName;
+//
+//    if (Address->Type == PH_IPV4_NETWORK_TYPE)
+//    {
+//        ipv4Address.sin_family = AF_INET;
+//        ipv4Address.sin_port = 0;
+//        ipv4Address.sin_addr = Address->InAddr;
+//        address = (PSOCKADDR)&ipv4Address;
+//        length = sizeof(ipv4Address);
+//    }
+//    else if (Address->Type == PH_IPV6_NETWORK_TYPE)
+//    {
+//        ipv6Address.sin6_family = AF_INET6;
+//        ipv6Address.sin6_port = 0;
+//        ipv6Address.sin6_flowinfo = 0;
+//        ipv6Address.sin6_addr = Address->In6Addr;
+//        ipv6Address.sin6_scope_id = 0;
+//        address = (PSOCKADDR)&ipv6Address;
+//        length = sizeof(ipv6Address);
+//    }
+//    else
+//    {
+//        return NULL;
+//    }
+//
+//    hostName = PhCreateStringEx(NULL, 128);
+//
+//    if (GetNameInfo(
+//        address,
+//        length,
+//        hostName->Buffer,
+//        (ULONG)hostName->Length / sizeof(WCHAR) + 1,
+//        NULL,
+//        0,
+//        NI_NAMEREQD
+//        ) != 0)
+//    {
+//        // Try with the maximum host name size.
+//        PhDereferenceObject(hostName);
+//        hostName = PhCreateStringEx(NULL, NI_MAXHOST * sizeof(WCHAR));
+//
+//        if (GetNameInfo(
+//            address,
+//            length,
+//            hostName->Buffer,
+//            (ULONG)hostName->Length / sizeof(WCHAR) + 1,
+//            NULL,
+//            0,
+//            NI_NAMEREQD
+//            ) != 0)
+//        {
+//            PhDereferenceObject(hostName);
+//
+//            return NULL;
+//        }
+//    }
+//
+//    PhTrimToNullTerminatorString(hostName);
+//
+//    return hostName;
+//}
+
+PPH_STRING PhpGetDnsReverseNameFromAddress(
     _In_ PPH_IP_ADDRESS Address
     )
 {
-    SOCKADDR_IN ipv4Address;
-    SOCKADDR_IN6 ipv6Address;
-    PSOCKADDR address;
-    socklen_t length;
-    PPH_STRING hostName;
+    switch (Address->Type)
+    {
+    case PH_IPV4_NETWORK_TYPE:
+        {
+            PH_STRING_BUILDER stringBuilder;
 
-    if (Address->Type == PH_IPV4_NETWORK_TYPE)
-    {
-        ipv4Address.sin_family = AF_INET;
-        ipv4Address.sin_port = 0;
-        ipv4Address.sin_addr = Address->InAddr;
-        address = (PSOCKADDR)&ipv4Address;
-        length = sizeof(ipv4Address);
-    }
-    else if (Address->Type == PH_IPV6_NETWORK_TYPE)
-    {
-        ipv6Address.sin6_family = AF_INET6;
-        ipv6Address.sin6_port = 0;
-        ipv6Address.sin6_flowinfo = 0;
-        ipv6Address.sin6_addr = Address->In6Addr;
-        ipv6Address.sin6_scope_id = 0;
-        address = (PSOCKADDR)&ipv6Address;
-        length = sizeof(ipv6Address);
-    }
-    else
-    {
+            PhInitializeStringBuilder(&stringBuilder, DNS_MAX_IP4_REVERSE_NAME_LENGTH);
+
+            PhAppendFormatStringBuilder(
+                &stringBuilder,
+                L"%hhu.%hhu.%hhu.%hhu.",
+                Address->InAddr.s_impno,
+                Address->InAddr.s_lh,
+                Address->InAddr.s_host,
+                Address->InAddr.s_net
+                );
+
+            PhAppendStringBuilder2(&stringBuilder, DNS_IP4_REVERSE_DOMAIN_STRING);
+
+            return PhFinalStringBuilderString(&stringBuilder);
+        }
+    case PH_IPV6_NETWORK_TYPE:
+        {
+            PH_STRING_BUILDER stringBuilder;
+
+            PhInitializeStringBuilder(&stringBuilder, DNS_MAX_IP6_REVERSE_NAME_LENGTH);
+
+            for (INT i = sizeof(IN6_ADDR) - 1; i >= 0; i--)
+            {
+                PhAppendFormatStringBuilder(
+                    &stringBuilder,
+                    L"%hhx.%hhx.",
+                    Address->In6Addr.s6_addr[i] & 0xF,
+                    (Address->In6Addr.s6_addr[i] >> 4) & 0xF
+                    );
+            }
+
+            PhAppendStringBuilder2(&stringBuilder, DNS_IP6_REVERSE_DOMAIN_STRING);
+
+            return PhFinalStringBuilderString(&stringBuilder);
+        }
+    default:
         return NULL;
     }
-
-    hostName = PhCreateStringEx(NULL, 128);
-
-    if (GetNameInfo(
-        address,
-        length,
-        hostName->Buffer,
-        (ULONG)hostName->Length / sizeof(WCHAR) + 1,
-        NULL,
-        0,
-        NI_NAMEREQD
-        ) != 0)
-    {
-        // Try with the maximum host name size.
-        PhDereferenceObject(hostName);
-        hostName = PhCreateStringEx(NULL, NI_MAXHOST * sizeof(WCHAR));
-
-        if (GetNameInfo(
-            address,
-            length,
-            hostName->Buffer,
-            (ULONG)hostName->Length / sizeof(WCHAR) + 1,
-            NULL,
-            0,
-            NI_NAMEREQD
-            ) != 0)
-        {
-            PhDereferenceObject(hostName);
-
-            return NULL;
-        }
-    }
-
-    PhTrimToNullTerminatorString(hostName);
-
-    return hostName;
-}
-
-PPH_STRING PhpGetIp4ReverseNameFromAddress(
-    _In_ IN_ADDR Address
-    )
-{
-    return PhFormatString(
-        L"%hhu.%hhu.%hhu.%hhu.%s",
-        Address.s_impno,
-        Address.s_lh,
-        Address.s_host,
-        Address.s_net,
-        DNS_IP4_REVERSE_DOMAIN_STRING_W
-        );
-}
-
-PPH_STRING PhpGetIp6ReverseNameFromAddress(
-    _In_ IN6_ADDR Address
-    )
-{
-    PH_STRING_BUILDER stringBuilder;
-
-    PhInitializeStringBuilder(&stringBuilder, DNS_MAX_NAME_BUFFER_LENGTH);
-
-    for (INT i = sizeof(IN6_ADDR) - 1; i >= 0; i--)
-    {
-        PhAppendFormatStringBuilder(
-            &stringBuilder,
-            L"%hhx.%hhx.",
-            Address.s6_addr[i] & 0xF,
-            (Address.s6_addr[i] >> 4) & 0xF
-            );
-    }
-
-    PhAppendStringBuilder2(&stringBuilder, DNS_IP6_REVERSE_DOMAIN_STRING_W);
-
-    return PhFinalStringBuilderString(&stringBuilder);
 }
 
 PPH_STRING PhGetHostNameFromAddressEx(
     _In_ PPH_IP_ADDRESS Address
     )
 {
-    PPH_STRING addressHostName = NULL;
-    PPH_STRING addressReverse = NULL;
-    PDNS_RECORD addressResults = NULL;
+    BOOLEAN dnsLocalQuery = FALSE;
+    PPH_STRING dnsHostNameString = NULL;
+    PPH_STRING dnsReverseNameString = NULL;
+    PDNS_RECORD dnsRecordList = NULL;
 
-    if (Address->Type == PH_IPV4_NETWORK_TYPE)
+    switch (Address->Type)
     {
-        addressReverse = PhpGetIp4ReverseNameFromAddress(Address->InAddr);
+    case PH_IPV4_NETWORK_TYPE:
+        {
+            if (IN4_IS_ADDR_UNSPECIFIED(&Address->InAddr))
+                return NULL;
+
+            if (IN4_IS_ADDR_LOOPBACK(&Address->InAddr) ||
+                IN4_IS_ADDR_RFC1918(&Address->InAddr))
+            {
+                dnsLocalQuery = TRUE;
+            }
+        }
+        break;
+    case PH_IPV6_NETWORK_TYPE:
+        {
+            if (IN6_IS_ADDR_UNSPECIFIED(&Address->In6Addr))
+                return NULL;
+
+            if (IN6_IS_ADDR_LOOPBACK(&Address->In6Addr) ||
+                IN6_IS_ADDR_LINKLOCAL(&Address->In6Addr))
+            {
+                dnsLocalQuery = TRUE;
+            }
+        }
+        break;
     }
-    else if (Address->Type == PH_IPV6_NETWORK_TYPE)
+
+    if (!(dnsReverseNameString = PhpGetDnsReverseNameFromAddress(Address)))
+        return NULL;
+
+    if (PhEnableNetworkResolveDoHSupport)
     {
-        addressReverse = PhpGetIp6ReverseNameFromAddress(Address->In6Addr);
+        if (!dnsLocalQuery)
+        {
+            dnsRecordList = PhHttpDnsQuery(
+                NULL,
+                dnsReverseNameString->Buffer,
+                DNS_TYPE_PTR
+                );
+        }
+
+        if (!dnsRecordList && DnsQuery_W_Import())
+        {
+            DnsQuery_W_Import()(
+                dnsReverseNameString->Buffer,
+                DNS_TYPE_PTR,
+                DNS_QUERY_NO_HOSTS_FILE, // DNS_QUERY_BYPASS_CACHE
+                NULL,
+                &dnsRecordList,
+                NULL
+                );
+        }
     }
     else
     {
-        return NULL;
+        if (DnsQuery_W_Import())
+        {
+            DnsQuery_W_Import()(
+                dnsReverseNameString->Buffer,
+                DNS_TYPE_PTR,
+                DNS_QUERY_NO_HOSTS_FILE, // DNS_QUERY_BYPASS_CACHE
+                NULL,
+                &dnsRecordList,
+                NULL
+                );
+        }
     }
 
-    DnsQuery(
-        addressReverse->Buffer,
-        DNS_TYPE_PTR,
-        DNS_QUERY_NO_HOSTS_FILE, // DNS_QUERY_BYPASS_CACHE
-        NULL,
-        &addressResults,
-        NULL
-        );
-
-    if (addressResults)
+    if (dnsRecordList)
     {
-        addressHostName = PhCreateString(addressResults->Data.PTR.pNameHost); // Return the first result (dmex)
-        DnsRecordListFree(addressResults, DnsFreeRecordList);
+        for (PDNS_RECORD dnsRecord = dnsRecordList; dnsRecord; dnsRecord = dnsRecord->pNext)
+        {
+            if (dnsRecord->wType == DNS_TYPE_PTR)
+            {
+                dnsHostNameString = PhCreateString(dnsRecord->Data.PTR.pNameHost); // Return the first result (dmex)
+                break;
+            }
+        }
+
+        if (DnsFree_Import())
+            DnsFree_Import()(dnsRecordList, DnsFreeRecordList);
     }
 
-    PhDereferenceObject(addressReverse);
+    PhDereferenceObject(dnsReverseNameString);
 
-    return addressHostName;
+    return dnsHostNameString;
 }
 
 NTSTATUS PhpNetworkItemQueryWorker(
@@ -734,7 +806,7 @@ VOID PhNetworkProviderUpdate(
             if (processItem = PhReferenceProcessItem(networkItem->ProcessId))
             {
                 networkItem->ProcessItem = processItem;
-                networkItem->ProcessName = PhReferenceObject(processItem->ProcessName);
+                PhSetReference(&networkItem->ProcessName, processItem->ProcessName);
                 networkItem->SubsystemProcess = !!processItem->IsSubsystemProcess;
                 PhpUpdateNetworkItemOwner(networkItem, processItem);
 
@@ -796,29 +868,26 @@ VOID PhNetworkProviderUpdate(
                 modified = TRUE;
             }
 
-            if (!networkItem->ProcessIconValid)
+            if (!networkItem->ProcessItem)
             {
-                if (!networkItem->ProcessItem)
+                networkItem->ProcessItem = PhReferenceProcessItem(networkItem->ProcessId);
+                // NOTE: We dereference processItem in PhpNetworkItemDeleteProcedure. (dmex)
+            }
+
+            if (networkItem->ProcessItem)
+            {
+                if (!networkItem->ProcessName)
                 {
-                    networkItem->ProcessItem = PhReferenceProcessItem(networkItem->ProcessId);
-                    // NOTE: We dereference processItem in PhpNetworkItemDeleteProcedure. (dmex)
+                    networkItem->ProcessName = PhReferenceObject(networkItem->ProcessItem->ProcessName);
+                    PhpUpdateNetworkItemOwner(networkItem, networkItem->ProcessItem);
+                    modified = TRUE;
                 }
 
-                if (networkItem->ProcessItem)
+                if (!networkItem->ProcessIconValid && PhTestEvent(&networkItem->ProcessItem->Stage1Event))
                 {
-                    if (!networkItem->ProcessName)
-                    {
-                        networkItem->ProcessName = PhReferenceObject(networkItem->ProcessItem->ProcessName);
-                        PhpUpdateNetworkItemOwner(networkItem, networkItem->ProcessItem);
-                        modified = TRUE;
-                    }
-
-                    if (!networkItem->ProcessIconValid && PhTestEvent(&networkItem->ProcessItem->Stage1Event))
-                    {
-                        networkItem->ProcessIcon = networkItem->ProcessItem->SmallIcon;
-                        networkItem->ProcessIconValid = TRUE;
-                        modified = TRUE;
-                    }
+                    networkItem->ProcessIcon = networkItem->ProcessItem->SmallIcon;
+                    networkItem->ProcessIconValid = TRUE;
+                    modified = TRUE;
                 }
             }
 

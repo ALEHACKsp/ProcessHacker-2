@@ -2,8 +2,8 @@
  * Process Hacker Plugins -
  *   Hardware Devices Plugin
  *
- * Copyright (C) 2015-2016 dmex
  * Copyright (C) 2016 wj32
+ * Copyright (C) 2015-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -27,6 +27,10 @@
 #define PLUGIN_NAME L"ProcessHacker.HardwareDevices"
 #define SETTING_NAME_ENABLE_NDIS (PLUGIN_NAME L".EnableNDIS")
 #define SETTING_NAME_INTERFACE_LIST (PLUGIN_NAME L".NetworkList")
+#define SETTING_NAME_NETWORK_POSITION (PLUGIN_NAME L".NetworkWindowPosition")
+#define SETTING_NAME_NETWORK_SIZE (PLUGIN_NAME L".NetworkWindowSize")
+#define SETTING_NAME_NETWORK_COLUMNS (PLUGIN_NAME L".NetworkListColumns")
+#define SETTING_NAME_NETWORK_SORTCOLUMN (PLUGIN_NAME L".NetworkListSort")
 #define SETTING_NAME_DISK_LIST (PLUGIN_NAME L".DiskList")
 #define SETTING_NAME_DISK_POSITION (PLUGIN_NAME L".DiskWindowPosition")
 #define SETTING_NAME_DISK_SIZE (PLUGIN_NAME L".DiskWindowSize")
@@ -73,9 +77,9 @@ VOID ShowDeviceMenu(
 typedef struct _DV_NETADAPTER_ID
 {
     NET_IFINDEX InterfaceIndex;
-    IF_LUID InterfaceLuid;
+    IF_LUID InterfaceLuid; // NET_LUID
     PPH_STRING InterfaceGuid;
-    PPH_STRING InterfaceDevice;
+    PPH_STRING InterfacePath;
 } DV_NETADAPTER_ID, *PDV_NETADAPTER_ID;
 
 typedef struct _DV_NETADAPTER_ENTRY
@@ -97,11 +101,13 @@ typedef struct _DV_NETADAPTER_ENTRY
         };
     };
 
-    //ULONG64 LinkSpeed;
-    ULONG64 InboundValue;
-    ULONG64 OutboundValue;
-    ULONG64 LastInboundValue;
-    ULONG64 LastOutboundValue;
+    ULONG64 NetworkReceiveRaw;
+    ULONG64 NetworkSendRaw;
+    ULONG64 CurrentNetworkReceive;
+    ULONG64 CurrentNetworkSend;
+
+    PH_UINT64_DELTA NetworkReceiveDelta;
+    PH_UINT64_DELTA NetworkSendDelta;
 
     PH_CIRCULAR_BUFFER_ULONG64 InboundBuffer;
     PH_CIRCULAR_BUFFER_ULONG64 OutboundBuffer;
@@ -119,6 +125,16 @@ typedef struct _DV_NETADAPTER_SYSINFO_CONTEXT
     PPH_SYSINFO_SECTION SysinfoSection;
     PH_GRAPH_STATE GraphState;
     PH_LAYOUT_MANAGER LayoutManager;
+    RECT GraphMargin;
+
+    HWND AdapterNameLabel;
+    HWND AdapterTextLabel;
+    HWND NetAdapterPanelSentLabel;
+    HWND NetAdapterPanelReceivedLabel;
+    HWND NetAdapterPanelTotalLabel;
+    HWND NetAdapterPanelStateLabel;
+    HWND NetAdapterPanelSpeedLabel;
+    HWND NetAdapterPanelBytesLabel;
 } DV_NETADAPTER_SYSINFO_CONTEXT, *PDV_NETADAPTER_SYSINFO_CONTEXT;
 
 typedef struct _DV_NETADAPTER_DETAILS_CONTEXT
@@ -172,6 +188,11 @@ VOID NetAdaptersInitialize(
 
 VOID NetAdaptersUpdate(
     VOID
+    );
+
+VOID NetAdapterUpdateDeviceInfo(
+    _In_opt_ HANDLE DeviceHandle,
+    _In_ PDV_NETADAPTER_ENTRY AdapterEntry
     );
 
 VOID InitializeNetAdapterId(
@@ -270,28 +291,27 @@ VOID ShowNetAdapterDetailsDialog(
 #define BITS_IN_ONE_BYTE 8
 #define NDIS_UNIT_OF_MEASUREMENT 100
 
-// dmex: rev
-typedef ULONG (WINAPI* _GetInterfaceDescriptionFromGuid)(
-    _Inout_ PGUID InterfaceGuid,
-    _Out_opt_ PWSTR InterfaceDescription,
-    _Inout_ PSIZE_T LengthAddress,
-    PVOID Unknown1,
-    PVOID Unknown2
-    );
-
 BOOLEAN NetworkAdapterQuerySupported(
     _In_ HANDLE DeviceHandle
     );
 
+_Success_(return)
 BOOLEAN NetworkAdapterQueryNdisVersion(
     _In_ HANDLE DeviceHandle,
     _Out_opt_ PUINT MajorVersion,
     _Out_opt_ PUINT MinorVersion
     );
 
-PPH_STRING NetworkAdapterQueryName(
-    _In_ HANDLE DeviceHandle,
+PPH_STRING NetworkAdapterQueryNameFromGuid(
     _In_ PPH_STRING InterfaceGuid
+    );
+
+PPH_STRING NetworkAdapterGetInterfaceAliasFromLuid(
+    _In_ PDV_NETADAPTER_ID Id
+    );
+
+PPH_STRING NetworkAdapterQueryName(
+    _In_ HANDLE DeviceHandle
     );
 
 NTSTATUS NetworkAdapterQueryStatistics(
@@ -304,6 +324,7 @@ NTSTATUS NetworkAdapterQueryLinkState(
     _Out_ PNDIS_LINK_STATE State
     );
 
+_Success_(return)
 BOOLEAN NetworkAdapterQueryMediaType(
     _In_ HANDLE DeviceHandle,
     _Out_ PNDIS_PHYSICAL_MEDIUM Medium
@@ -319,8 +340,10 @@ ULONG64 NetworkAdapterQueryValue(
     _In_ NDIS_OID OpCode
     );
 
-BOOLEAN QueryInterfaceRow(
+_Success_(return)
+BOOLEAN NetworkAdapterQueryInterfaceRow(
     _In_ PDV_NETADAPTER_ID Id,
+    _In_ MIB_IF_ENTRY_LEVEL Level,
     _Out_ PMIB_IF_ROW2 InterfaceRow
     );
 
@@ -403,6 +426,16 @@ typedef struct _DV_DISK_SYSINFO_CONTEXT
     PPH_SYSINFO_SECTION SysinfoSection;
     PH_GRAPH_STATE GraphState;
     PH_LAYOUT_MANAGER LayoutManager;
+    RECT GraphMargin;
+
+    HWND DiskPathLabel;
+    HWND DiskNameLabel;
+    HWND DiskDrivePanelReadLabel;
+    HWND DiskDrivePanelWriteLabel;
+    HWND DiskDrivePanelTotalLabel;
+    HWND DiskDrivePanelActiveLabel;
+    HWND DiskDrivePanelTimeLabel;
+    HWND DiskDrivePanelBytesLabel;
 } DV_DISK_SYSINFO_CONTEXT, *PDV_DISK_SYSINFO_CONTEXT;
 
 typedef struct _DV_DISK_OPTIONS_CONTEXT
@@ -512,7 +545,7 @@ typedef enum _DISKDRIVE_DETAILS_INDEX
     //DISKDRIVE_DETAILS_INDEX_ROOT_INDEX_READ_BYTES,
     //DISKDRIVE_DETAILS_INDEX_ROOT_INDEX_WRITE_BYTES,
 
-    DISKDRIVE_DETAILS_INDEX_BITMAP_READS,
+    /*DISKDRIVE_DETAILS_INDEX_BITMAP_READS,
     DISKDRIVE_DETAILS_INDEX_BITMAP_WRITES,
     DISKDRIVE_DETAILS_INDEX_BITMAP_READ_BYTES,
     DISKDRIVE_DETAILS_INDEX_BITMAP_WRITE_BYTES,
@@ -532,7 +565,7 @@ typedef enum _DISKDRIVE_DETAILS_INDEX
     DISKDRIVE_DETAILS_INDEX_LOGFILE_READ_BYTES,
     DISKDRIVE_DETAILS_INDEX_LOGFILE_WRITE_BYTES,
 
-  /*DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_WRITE,
+    DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_WRITE,
     DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_CREATE,
     DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_SETINFO,
     DISKDRIVE_DETAILS_INDEX_MFT_USER_LEVEL_FLUSH,
@@ -568,7 +601,7 @@ typedef enum _DISKDRIVE_DETAILS_INDEX
     DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_WRITE,
     DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_CREATE,
     DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_SETINFO,
-    DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_FLUSH,*/
+    DISKDRIVE_DETAILS_INDEX_MFT_BITMAP_USER_LEVEL_FLUSH,
 
     DISKDRIVE_DETAILS_INDEX_ALLOCATE_CALLS,
     DISKDRIVE_DETAILS_INDEX_ALLOCATE_CLUSTERS,
@@ -579,9 +612,8 @@ typedef enum _DISKDRIVE_DETAILS_INDEX
     DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE,
     DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_CLUSTERS,
     DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_MISS,
-    DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_MISS_CLUSTERS,
+    DISKDRIVE_DETAILS_INDEX_ALLOCATE_CACHE_MISS_CLUSTERS,*/
 
-    DISKDRIVE_DETAILS_INDEX_LOGFILE_EXCEPTIONS,
     DISKDRIVE_DETAILS_INDEX_OTHER_EXCEPTIONS
 } DISKDRIVE_DETAILS_INDEX;
 
@@ -611,6 +643,7 @@ PPH_LIST DiskDriveQueryMountPointHandles(
     _In_ ULONG DeviceNumber
     );
 
+_Success_(return)
 BOOLEAN DiskDriveQueryDeviceInformation(
     _In_ HANDLE DeviceHandle,
     _Out_opt_ PPH_STRING* DiskVendor,
@@ -657,6 +690,7 @@ typedef struct _EXFAT_FILESYSTEM_STATISTICS
     EXFAT_STATISTICS ExFatStatistics;
 } EXFAT_FILESYSTEM_STATISTICS, *PEXFAT_FILESYSTEM_STATISTICS;
 
+_Success_(return)
 BOOLEAN DiskDriveQueryFileSystemInfo(
     _In_ HANDLE DeviceHandle,
     _Out_ USHORT* FileSystemType,
@@ -669,11 +703,13 @@ typedef struct _NTFS_VOLUME_INFO
     NTFS_EXTENDED_VOLUME_DATA ExtendedVolumeData;
 } NTFS_VOLUME_INFO, *PNTFS_VOLUME_INFO;
 
+_Success_(return)
 BOOLEAN DiskDriveQueryNtfsVolumeInfo(
     _In_ HANDLE DosDeviceHandle,
     _Out_ PNTFS_VOLUME_INFO VolumeInfo
     );
 
+_Success_(return)
 BOOLEAN DiskDriveQueryRefsVolumeInfo(
     _In_ HANDLE DosDeviceHandle,
     _Out_ PREFS_VOLUME_DATA_BUFFER VolumeInfo

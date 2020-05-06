@@ -114,7 +114,9 @@ EXPORTS
     PhCreateStringEx
     PhCreateThread
     PhCreateThread2
+    PhCreateThreadEx
     PhDecodeUnicodeDecoder
+    PhDelayExecution
     PhDeleteArray
     PhDeleteBytesBuilder
     PhDeleteCallback
@@ -171,6 +173,7 @@ EXPORTS
     PhHashStringRef
     PhHexStringToBuffer
     PhHexStringToBufferEx
+    PhHungWindowFromGhostWindow
     PhInitializeArray
     PhInitializeAvlTree
     PhInitializeBytesBuilder
@@ -232,6 +235,7 @@ EXPORTS
 
 ; phnative
     PhCreateDirectory
+    PhCreateFile
     PhCreateFileWin32
     PhCreateFileWin32Ex
     PhCreateKey
@@ -240,7 +244,11 @@ EXPORTS
     PhConnectPipe
     PhDeleteDirectory
     PhDeleteFileWin32
+    PhDetermineDosPathNameType
+    PhDoesFileExistsWin32
     PhDisconnectNamedPipe
+    PhEnumerateKey
+    PhEnumerateValueKey
     PhEnumDirectoryFile
     PhEnumDirectoryObjects
     PhEnumFileStreams
@@ -261,6 +269,7 @@ EXPORTS
     PhFindProcessInformation
     PhFindProcessInformationByImageName
     PhGetFileName
+    PhGetFilePosition
     PhGetFileSize
     PhGetJobProcessIdList
     PhGetKernelFileName
@@ -298,17 +307,21 @@ EXPORTS
     PhOpenProcess = PhOpenProcessPublic
     PhOpenThread = PhOpenThreadPublic
     PhOpenThreadProcess
+    PhOpenProcessToken = PhOpenProcessTokenPublic
     PhPeekNamedPipe
     PhQueryFullAttributesFileWin32
     PhQueryKey
     PhQueryValueKey
+    PhQueryTokenVariableSize
     PhResolveDevicePrefix
+    PhSetFilePosition
     PhSetFileSize
     PhSetObjectSecurity
     PhSetTokenIsVirtualizationEnabled
     PhSetTokenPrivilege
     PhSetTokenPrivilege2
     PhSetTokenSessionId
+    PhSetValueKey
     PhTerminateProcess = PhTerminateProcessPublic
     PhTransceiveNamedPipe
     PhUnloadDllProcess
@@ -358,6 +371,7 @@ EXPORTS
     PhGetApplicationFileName
     PhGetBaseDirectory
     PhGetBaseName
+    PhGetClassObject
     PhGetDllFileName
     PhGetFileDialogFileName
     PhGetFileDialogFilterIndex
@@ -377,6 +391,8 @@ EXPORTS
     PhInitializeHash
     PhInitializeImageVersionInfo
     PhIsExecutablePacked
+    PhLargeIntegerToLocalSystemTime
+    PhLargeIntegerToSystemTime
     PhMapFlags1
     PhMapFlags2
     PhMatchWildcards
@@ -427,6 +443,7 @@ EXPORTS
 
 ; cpysave
     PhGetGenericTreeNewLines
+    PhGetListViewItemText
     PhGetTreeNewText
 
 ; emenu
@@ -489,6 +506,8 @@ EXPORTS
     PhAddListViewItem
     PhAddTabControlTab
     PhDeleteLayoutManager
+    PhEnumWindows
+    PhEnumChildWindows
     PhFindListViewItemByFlags
     PhFindListViewItemByParam
     PhGetComboBoxString
@@ -526,6 +545,7 @@ EXPORTS
     PhGetDialogItemValue
     PhSetDialogItemValue
     PhSetDialogItemText
+    PhSetWindowText
     PhApplicationFont
     PhTreeWindowFont
     PhRegisterWindowCallback
@@ -533,10 +553,15 @@ EXPORTS
     PhInitializeWindowTheme
     PhReInitializeWindowTheme
     PhInitializeWindowThemeStatusBar
+    PhInitializeThemeWindowHeader
+    PhGetGlobalTimerQueue
+    PhThemeWindowDrawRebar
+    PhThemeWindowDrawToolbar
 
 ; hndlinfo
     PhEnumObjectTypes
     PhFormatNativeKeyName
+    PhGetEtwPublisherName
     PhGetHandleInformation
     PhGetHandleInformationEx
     PhStdGetClientIdName
@@ -684,7 +709,31 @@ EXPORTS
 
 ; cache
     PhCreateCacheFile
+    PhClearCacheDirectory
     PhDeleteCacheFile
 
 ; appresolver
     PhAppResolverGetAppIdForWindow
+
+; http
+    PhHttpSocketCreate
+    PhHttpSocketDestroy
+    PhHttpSocketConnect
+    PhHttpSocketBeginRequest
+    PhHttpSocketSendRequest
+    PhHttpSocketEndRequest
+    PhHttpSocketReadData
+    PhHttpSocketWriteData
+    PhHttpSocketAddRequestHeaders
+    PhHttpSocketQueryHeaders
+    PhHttpSocketQueryHeaderString
+    PhHttpSocketQueryHeaderUlong
+    PhHttpSocketQueryOptionString
+    PhHttpSocketReadDataToBuffer
+    PhHttpSocketDownloadString
+    PhHttpSocketSetFeature
+    PhHttpSocketSetSecurity
+    PhHttpSocketParseUrl
+    PhHttpSocketGetErrorMessage
+    PhHttpSocketSetCredentials
+    PhHttpDnsQuery

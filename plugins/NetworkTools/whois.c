@@ -2,7 +2,7 @@
  * Process Hacker Network Tools -
  *   Whois dialog
  *
- * Copyright (C) 2013-2017 dmex
+ * Copyright (C) 2013-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -52,7 +52,7 @@ VOID RichEditSetText(
 
     SetFocus(RichEditHandle);
     SendMessage(RichEditHandle, WM_SETREDRAW, FALSE, 0);
-    SendMessage(RichEditHandle, EM_SETSEL, -2, -1);
+    SendMessage(RichEditHandle, EM_SETSEL, 0, -1); // -2
     SendMessage(RichEditHandle, EM_REPLACESEL, FALSE, (LPARAM)Text);
     SendMessage(RichEditHandle, WM_VSCROLL, SB_TOP, 0); // requires SetFocus()
     SendMessage(RichEditHandle, WM_SETREDRAW, TRUE, 0);
@@ -80,13 +80,16 @@ PPH_STRING TrimString2(
     return PhCreateString2(&sr);
 }
 
+_Success_(return)
 BOOLEAN ReadSocketString(
     _In_ SOCKET Handle,
-    _Out_ _Deref_post_z_cap_(*DataLength) PSTR *Data,
-    _Out_ ULONG *DataLength
+    _Out_opt_ _Deref_post_z_cap_(*DataLength) PSTR* Data,
+    _Out_opt_ ULONG* DataLength
     )
 {
     PSTR data;
+    WSABUF socketBuffer;
+    ULONG socketFlags;
     ULONG allocatedLength;
     ULONG dataLength;
     ULONG returnLength;
@@ -96,10 +99,11 @@ BOOLEAN ReadSocketString(
     data = (PSTR)PhAllocate(allocatedLength);
     dataLength = 0;
 
-    // Zero the buffer
-    memset(buffer, 0, PAGE_SIZE);
+    socketBuffer.buf = buffer;
+    socketBuffer.len = PAGE_SIZE;
+    socketFlags = 0;
 
-    while ((returnLength = recv(Handle, buffer, PAGE_SIZE, 0)) != SOCKET_ERROR)
+    while (WSARecv(Handle, &socketBuffer, 1, &returnLength, &socketFlags, NULL, NULL) != SOCKET_ERROR)
     {
         if (returnLength == 0)
             break;
@@ -124,47 +128,84 @@ BOOLEAN ReadSocketString(
         data = (PSTR)PhReAllocate(data, allocatedLength);
     }
 
-    // Ensure that the buffer is null-terminated.
-    data[dataLength] = 0;
+    data[dataLength] = ANSI_NULL;
 
-    *DataLength = dataLength;
-    *Data = data;
+    if (dataLength)
+    {
+        if (Data)
+            *Data = data;
+        else
+            PhFree(data);
 
-    return TRUE;
+        if (DataLength)
+            *DataLength = dataLength;
+
+        return TRUE;
+    }
+
+    PhFree(data);
+
+    return FALSE;
 }
 
+_Success_(return)
+BOOLEAN WriteSocketString(
+    _In_ SOCKET Handle,
+    _In_ PSTR Data,
+    _In_ ULONG DataLength
+    )
+{
+    ULONG socketBufferSent;
+    WSABUF socketBuffer;
+
+    socketBufferSent = 0;
+    socketBuffer.buf = Data;
+    socketBuffer.len = DataLength;
+
+    if (WSASend(Handle, &socketBuffer, 1, &socketBufferSent, 0, NULL, NULL) != SOCKET_ERROR)
+    {
+        if (socketBufferSent == DataLength)
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+_Success_(return)
 BOOLEAN WhoisExtractServerUrl(
-    _In_ PPH_STRING WhoisResponce,
-    _Out_ PPH_STRING *WhoisServerAddress
+    _In_ PPH_STRING WhoisResponse,
+    _Out_opt_ PPH_STRING *WhoisServerAddress
     )
 {
     ULONG_PTR whoisServerHostnameIndex;
     ULONG_PTR whoisServerHostnameLength;
     PPH_STRING whoisServerName;
 
-    if ((whoisServerHostnameIndex = PhFindStringInString(WhoisResponce, 0, L"whois:")) == -1)
+    if ((whoisServerHostnameIndex = PhFindStringInString(WhoisResponse, 0, L"whois:")) == -1)
         return FALSE;
-    if ((whoisServerHostnameLength = PhFindStringInString(WhoisResponce, whoisServerHostnameIndex, L"\n")) == -1)
+    if ((whoisServerHostnameLength = PhFindStringInString(WhoisResponse, whoisServerHostnameIndex, L"\n")) == -1)
         return FALSE;
     if ((whoisServerHostnameLength = whoisServerHostnameLength - whoisServerHostnameIndex) == 0)
         return FALSE;
  
     whoisServerName = PhSubstring(
-        WhoisResponce,
+        WhoisResponse,
         whoisServerHostnameIndex + wcslen(L"whois:"),
         (ULONG)whoisServerHostnameLength - wcslen(L"whois:")
         );
 
-    *WhoisServerAddress = TrimString(whoisServerName);
+    if (WhoisServerAddress)
+        *WhoisServerAddress = TrimString(whoisServerName);
 
     PhDereferenceObject(whoisServerName);
     return TRUE;
 }
 
+_Success_(return)
 BOOLEAN WhoisExtractReferralServer(
-    _In_ PPH_STRING WhoisResponce,
-    _Out_ PPH_STRING *WhoisServerAddress,
-    _Out_ PPH_STRING *WhoisServerPort
+    _In_ PPH_STRING WhoisResponse,
+    _Out_opt_ PPH_STRING *WhoisServerAddress,
+    _Out_opt_ USHORT *WhoisServerPort
     )
 {
     ULONG_PTR whoisServerHostnameIndex;
@@ -176,125 +217,206 @@ BOOLEAN WhoisExtractReferralServer(
     WCHAR urlPort[0x100] = L"";
     WCHAR urlPath[0x100] = L"";
 
-    if ((whoisServerHostnameIndex = PhFindStringInString(WhoisResponce, 0, L"ReferralServer:")) == -1)
+    if ((whoisServerHostnameIndex = PhFindStringInString(WhoisResponse, 0, L"ReferralServer:")) == -1)
         return FALSE;
-    if ((whoisServerHostnameLength = PhFindStringInString(WhoisResponce, whoisServerHostnameIndex, L"\n")) == -1)
+    if ((whoisServerHostnameLength = PhFindStringInString(WhoisResponse, whoisServerHostnameIndex, L"\n")) == -1)
         return FALSE;
     if ((whoisServerHostnameLength = whoisServerHostnameLength - whoisServerHostnameIndex) == 0)
         return FALSE;
 
     whoisServerName = PhSubstring(
-        WhoisResponce,
+        WhoisResponse,
         whoisServerHostnameIndex + wcslen(L"ReferralServer:"),
         (ULONG)whoisServerHostnameLength - wcslen(L"ReferralServer:")
         );
 
     whoisServerHostname = TrimString(whoisServerName);
-    
+
     if (swscanf_s(
         whoisServerHostname->Buffer,
-        L"%[^:]://%[^:]:%[^/]/%s",
+        L"%255[^:]://%255[^:]:%255[^/]/%255s",
         urlProtocal, 
-        (UINT)ARRAYSIZE(urlProtocal),
+        (UINT)RTL_NUMBER_OF(urlProtocal),
         urlHost,
-        (UINT)ARRAYSIZE(urlHost),
+        (UINT)RTL_NUMBER_OF(urlHost),
         urlPort,
-        (UINT)ARRAYSIZE(urlPort),
+        (UINT)RTL_NUMBER_OF(urlPort),
         urlPath,
-        (UINT)ARRAYSIZE(urlPath)
+        (UINT)RTL_NUMBER_OF(urlPath)
         ))
     {
-        *WhoisServerAddress = PhCreateString(urlHost);
-
-        if (PhCountStringZ(urlPort) >= 2)
+        if (WhoisServerAddress)
         {
-            *WhoisServerPort = PhCreateString(urlPort);
+            *WhoisServerAddress = PhCreateString(urlHost);
+        }
+
+        if (WhoisServerPort)
+        {
+            USHORT serverPort = IPPORT_WHOIS;
+
+            if (PhCountStringZ(urlPort) >= 2)
+            {
+                ULONG64 serverPortInteger;
+                PH_STRINGREF serverPortSr;
+
+                PhInitializeStringRefLongHint(&serverPortSr, urlPort);
+
+                if (PhStringToInteger64(&serverPortSr, 10, &serverPortInteger))
+                {
+                    serverPort = (USHORT)serverPortInteger;
+                }
+            }
+
+            *WhoisServerPort = serverPort;
         }
 
         PhDereferenceObject(whoisServerName);
         PhDereferenceObject(whoisServerHostname);
+
         return TRUE;
     }
 
     PhDereferenceObject(whoisServerName);
     PhDereferenceObject(whoisServerHostname);
+
     return FALSE;
 }
 
-BOOLEAN WhoisQueryServer(
+_Success_(return)
+BOOLEAN WhoisConnectServer(
     _In_ PWSTR WhoisServerAddress,
-    _In_ PWSTR WhoisServerPort,
-    _In_ PWSTR WhoisQueryAddress, 
-    _In_ PPH_STRING* response
+    _In_ USHORT WhoisServerPort,
+    _In_ USHORT DnsQueryMessageType,
+    _Out_ SOCKET* WhoisServerSocketHandle
     )
 {
-    WSADATA winsockStartup;
-    PADDRINFOW result = NULL;
-    PADDRINFOW addrInfo = NULL;
-    ADDRINFOW hints;
-    ULONG whoisResponceLength = 0;
-    PSTR whoisResponce = NULL;
-    PPH_BYTES whoisQuery = NULL;
+    PDNS_RECORD dnsRecordList = NULL;
+    SOCKET whoisSocketHandle = INVALID_SOCKET;
 
-    if (!WhoisServerPort)
-        WhoisServerPort = L"43";
-
-    if (WSAStartup(WINSOCK_VERSION, &winsockStartup) != ERROR_SUCCESS)
-        return FALSE;
-
-    memset(&hints, 0, sizeof(ADDRINFOW));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    if (GetAddrInfo(WhoisServerAddress, WhoisServerPort, &hints, &result))
+    if (!(dnsRecordList = PhHttpDnsQuery(NULL, WhoisServerAddress, DnsQueryMessageType)))
     {
-        WSACleanup();
+        DnsQuery(
+            WhoisServerAddress,
+            DnsQueryMessageType,
+            DNS_QUERY_BYPASS_CACHE | DNS_QUERY_NO_HOSTS_FILE,
+            NULL,
+            &dnsRecordList,
+            NULL
+            );
+    }
+
+    if (dnsRecordList)
+    {
+        for (PDNS_RECORD dnsRecord = dnsRecordList; dnsRecord; dnsRecord = dnsRecord->pNext)
+        {
+            if (dnsRecord->wType == DNS_TYPE_A)
+            {
+                SOCKADDR_IN remoteAddr;
+
+                memset(&remoteAddr, 0, sizeof(SOCKADDR_IN));
+                remoteAddr.sin_family = AF_INET;
+                remoteAddr.sin_port = _byteswap_ushort(WhoisServerPort);
+                memcpy_s(
+                    &remoteAddr.sin_addr.s_addr,
+                    sizeof(remoteAddr.sin_addr.s_addr),
+                    &dnsRecord->Data.A.IpAddress,
+                    sizeof(dnsRecord->Data.A.IpAddress)
+                    );
+
+                if ((whoisSocketHandle = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0)) != INVALID_SOCKET)
+                {
+                    if (WSAConnect(whoisSocketHandle, (PSOCKADDR)&remoteAddr, sizeof(SOCKADDR_IN), NULL, NULL, NULL, NULL) != SOCKET_ERROR)
+                        break;
+
+                    closesocket(whoisSocketHandle);
+                    whoisSocketHandle = INVALID_SOCKET;
+                }
+            }
+            else if (dnsRecord->wType == DNS_TYPE_AAAA)
+            {
+                SOCKADDR_IN6 remoteAddr;
+
+                memset(&remoteAddr, 0, sizeof(SOCKADDR_IN6));
+                remoteAddr.sin6_family = AF_INET6;
+                remoteAddr.sin6_port = _byteswap_ushort(WhoisServerPort);
+                memcpy_s(
+                    remoteAddr.sin6_addr.s6_addr,
+                    sizeof(remoteAddr.sin6_addr.s6_addr),
+                    dnsRecord->Data.AAAA.Ip6Address.IP6Byte,
+                    sizeof(dnsRecord->Data.AAAA.Ip6Address.IP6Byte)
+                    );
+
+                if ((whoisSocketHandle = WSASocket(AF_INET6, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0)) != INVALID_SOCKET)
+                {
+                    if (WSAConnect(whoisSocketHandle, (PSOCKADDR)&remoteAddr, sizeof(SOCKADDR_IN6), NULL, NULL, NULL, NULL) != SOCKET_ERROR)
+                        break;
+
+                    closesocket(whoisSocketHandle);
+                    whoisSocketHandle = INVALID_SOCKET;
+                }
+            }
+        }
+    
+        DnsFree(dnsRecordList, DnsFreeRecordList);
+    }
+
+    if (whoisSocketHandle != INVALID_SOCKET)
+    {
+        *WhoisServerSocketHandle = whoisSocketHandle;
+        return TRUE;
+    }
+
+    return FALSE;  
+}
+
+_Success_(return)
+BOOLEAN WhoisQueryServer(
+    _In_ PWSTR WhoisServerAddress,
+    _In_ USHORT WhoisServerPort,
+    _In_ PWSTR WhoisQueryAddress, 
+    _Out_ PPH_STRING* WhoisQueryResponse
+    )
+{
+    ULONG whoisResponseLength = 0;
+    PSTR whoisResponse = NULL;
+    PPH_BYTES whoisServerQuery = NULL;
+    SOCKET whoisSocketHandle = INVALID_SOCKET;
+
+    if (!WhoisServerAddress)
         return FALSE;
+    if (WhoisServerPort == 0)
+        return FALSE;
+
+    if (!WhoisConnectServer(WhoisServerAddress, WhoisServerPort, DNS_TYPE_AAAA, &whoisSocketHandle))
+    {
+        if (!WhoisConnectServer(WhoisServerAddress, WhoisServerPort, DNS_TYPE_A, &whoisSocketHandle))
+            return FALSE;
     }
 
     if (PhEqualStringZ(WhoisServerAddress, L"whois.arin.net", TRUE))
-        whoisQuery = FormatAnsiString("n %S\r\n", WhoisQueryAddress);
+        whoisServerQuery = FormatAnsiString("n %S\r\n", WhoisQueryAddress);
     else
-        whoisQuery = FormatAnsiString("%S\r\n", WhoisQueryAddress);
+        whoisServerQuery = FormatAnsiString("%S\r\n", WhoisQueryAddress);
 
-    for (addrInfo = result; addrInfo; addrInfo = addrInfo->ai_next)
+    if (!WriteSocketString(whoisSocketHandle, whoisServerQuery->Buffer, (ULONG)whoisServerQuery->Length))
     {
-        SOCKET socketHandle = socket(
-            addrInfo->ai_family, 
-            addrInfo->ai_socktype, 
-            addrInfo->ai_protocol
-            );
-
-        if (socketHandle == INVALID_SOCKET)
-            continue;
-
-        if (connect(socketHandle, addrInfo->ai_addr, (INT)addrInfo->ai_addrlen) == SOCKET_ERROR)
-        {
-            closesocket(socketHandle);
-            continue;
-        }
-
-        if (send(socketHandle, whoisQuery->Buffer, (INT)whoisQuery->Length, 0) == SOCKET_ERROR)
-        {
-            closesocket(socketHandle);
-            continue;
-        }
-
-        if (ReadSocketString(socketHandle, &whoisResponce, &whoisResponceLength))
-        {
-            closesocket(socketHandle);
-            break;
-        }
+        PhDereferenceObject(whoisServerQuery);
+        return FALSE;
     }
 
-    FreeAddrInfo(result);
-    WSACleanup();
-    PhDereferenceObject(whoisQuery);
-
-    if (whoisResponce)
+    if (!ReadSocketString(whoisSocketHandle, &whoisResponse, &whoisResponseLength))
     {
-        *response = PhConvertUtf8ToUtf16(whoisResponce);
+        PhDereferenceObject(whoisServerQuery);
+        return FALSE;
+    }
+
+    PhDereferenceObject(whoisServerQuery);
+    closesocket(whoisSocketHandle);
+
+    if (whoisResponse)
+    {
+        if (WhoisQueryResponse)
+            *WhoisQueryResponse = PhConvertUtf8ToUtf16Ex(whoisResponse, whoisResponseLength);
         return TRUE;
     }
 
@@ -306,16 +428,22 @@ NTSTATUS NetworkWhoisThreadStart(
     )
 {
     PNETWORK_WHOIS_CONTEXT context = (PNETWORK_WHOIS_CONTEXT)Parameter;
+    WSADATA winsockStartup;
     PH_STRING_BUILDER sb;
     PPH_STRING whoisResponse = NULL;
     PPH_STRING whoisReferralResponse = NULL;
     PPH_STRING whoisServerName = NULL;
     PPH_STRING whoisReferralServerName = NULL;
-    PPH_STRING whoisReferralServerPort = NULL;
-    
+    USHORT whoisReferralServerPort = IPPORT_WHOIS;
+
+    if (WSAStartup(WINSOCK_VERSION, &winsockStartup) != ERROR_SUCCESS)
+        return STATUS_FAIL_CHECK;
+
     PhInitializeStringBuilder(&sb, 0x100);
 
-    if (!WhoisQueryServer(L"whois.iana.org", L"43", context->IpAddressString, &whoisResponse))
+    SendMessage(context->WindowHandle, NTM_RECEIVEDWHOIS, 0, (LPARAM)PhCreateString(L"Connecting to whois.iana.org..."));
+
+    if (!WhoisQueryServer(L"whois.iana.org", IPPORT_WHOIS, context->IpAddressString, &whoisResponse))
     {
         PhAppendFormatStringBuilder(&sb, L"Connection to whois.iana.org failed.\n");
         goto CleanupExit;
@@ -327,9 +455,11 @@ NTSTATUS NetworkWhoisThreadStart(
         goto CleanupExit;
     }
 
+    SendMessage(context->WindowHandle, NTM_RECEIVEDWHOIS, 0, (LPARAM)PhFormatString(L"Connecting to %s...", PhGetStringOrEmpty(whoisServerName)));
+
     if (WhoisQueryServer(
         PhGetString(whoisServerName),
-        L"43",
+        IPPORT_WHOIS,
         context->IpAddressString,
         &whoisResponse
         ))
@@ -340,38 +470,54 @@ NTSTATUS NetworkWhoisThreadStart(
             &whoisReferralServerPort
             ))
         {
+            SendMessage(context->WindowHandle, NTM_RECEIVEDWHOIS, 0, (LPARAM)PhFormatString(
+                L"%s referred the request to %s\n",
+                PhGetString(whoisServerName),
+                PhGetString(whoisReferralServerName)
+                ));
+
             PhAppendFormatStringBuilder(
                 &sb, 
-                L"%s referred the request to: %s\n", 
+                L"%s referred the request to %s\n", 
                 PhGetString(whoisServerName), 
                 PhGetString(whoisReferralServerName)
                 );
 
             if (WhoisQueryServer(
                 PhGetString(whoisReferralServerName),
-                PhGetString(whoisReferralServerPort),
+                whoisReferralServerPort,
                 context->IpAddressString,
                 &whoisReferralResponse
                 ))
             {
                 PhAppendFormatStringBuilder(&sb, L"\n%s\n", PhGetString(whoisReferralResponse));
                 PhAppendFormatStringBuilder(&sb, L"\nOriginal request to %s:\n%s\n", PhGetString(whoisServerName), PhGetString(whoisResponse));
-                PostMessage(context->WindowHandle, NTM_RECEIVEDWHOIS, 0, (LPARAM)PhFinalStringBuilderString(&sb));
                 goto CleanupExit;
             }
         }
     }
+    else
+    {
+        PhAppendFormatStringBuilder(&sb, L"Connection to %s failed.\n", PhGetStringOrEmpty(whoisServerName));
+        goto CleanupExit;
+    }
 
     PhAppendFormatStringBuilder(&sb, L"\n%s", PhGetString(whoisResponse));
 
+CleanupExit:
+
     PostMessage(context->WindowHandle, NTM_RECEIVEDWHOIS, 0, (LPARAM)PhFinalStringBuilderString(&sb));
 
-CleanupExit:
-    PhClearReference(&whoisResponse);
-    PhClearReference(&whoisReferralResponse);
-    PhClearReference(&whoisServerName);
-    PhClearReference(&whoisReferralServerName);
-    PhClearReference(&whoisReferralServerPort);
+    WSACleanup();
+
+    if (whoisResponse)
+        PhDereferenceObject(whoisResponse);
+    if (whoisReferralResponse)
+        PhDereferenceObject(whoisReferralResponse);
+    if (whoisServerName)
+        PhDereferenceObject(whoisServerName);
+    if (whoisReferralServerName)
+        PhDereferenceObject(whoisReferralServerName);
 
     return STATUS_SUCCESS;
 }
@@ -412,13 +558,22 @@ INT_PTR CALLBACK NetworkOutputDlgProc(
     {
     case WM_INITDIALOG:
         {
+            context->WindowHandle = hwndDlg;
+            context->RichEditHandle = GetDlgItem(hwndDlg, IDC_NETOUTPUTEDIT);
+
             SendMessage(hwndDlg, WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(PHAPP_IDI_PROCESSHACKER)));
             SendMessage(hwndDlg, WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(PHAPP_IDI_PROCESSHACKER)));
 
-            SetWindowText(hwndDlg, PhaFormatString(L"Whois %s...", context->IpAddressString)->Buffer);
+            if (context->RemoteEndpoint.Address.Type == PH_IPV4_NETWORK_TYPE)
+            {
+                RtlIpv4AddressToString(&context->RemoteEndpoint.Address.InAddr, context->IpAddressString);
+            }
+            else if (context->RemoteEndpoint.Address.Type == PH_IPV6_NETWORK_TYPE)
+            {
+                RtlIpv6AddressToString(&context->RemoteEndpoint.Address.In6Addr, context->IpAddressString);
+            }
 
-            context->WindowHandle = hwndDlg;
-            context->RichEditHandle = GetDlgItem(hwndDlg, IDC_NETOUTPUTEDIT);
+            SetWindowText(hwndDlg, PhaFormatString(L"Whois %s...", context->IpAddressString)->Buffer);
 
             //SendMessage(context->RichEditHandle, EM_SETBKGNDCOLOR, RGB(0, 0, 0), 0);
             SendMessage(context->RichEditHandle, EM_SETEVENTMASK, 0, SendMessage(context->RichEditHandle, EM_GETEVENTMASK, 0, 0) | ENM_LINK);
@@ -434,9 +589,9 @@ INT_PTR CALLBACK NetworkOutputDlgProc(
             else
                 PhCenterWindow(hwndDlg, PhMainWndHandle);
 
-            PhCreateThread2(NetworkWhoisThreadStart, (PVOID)context);
-
             PhInitializeWindowTheme(hwndDlg, !!PhGetIntegerSetting(L"EnableThemeSupport"));
+
+            PhCreateThread2(NetworkWhoisThreadStart, (PVOID)context);
         }
         break;
     case WM_COMMAND:
@@ -444,7 +599,6 @@ INT_PTR CALLBACK NetworkOutputDlgProc(
             switch (GET_WM_COMMAND_ID(wParam, lParam))
             {
             case IDCANCEL:
-            case IDOK:
                 DestroyWindow(hwndDlg);
                 break;
             }
@@ -470,8 +624,7 @@ INT_PTR CALLBACK NetworkOutputDlgProc(
                         TEXTRANGE textRange;
 
                         length = (link->chrg.cpMax - link->chrg.cpMin) * sizeof(WCHAR);
-                        buffer = PhAllocate(length + 1);
-                        memset(buffer, 0, length + 1);
+                        buffer = PhAllocateZero(length + sizeof(UNICODE_NULL));
 
                         textRange.chrg = link->chrg;
                         textRange.lpstrText = buffer;
@@ -501,13 +654,70 @@ INT_PTR CALLBACK NetworkOutputDlgProc(
         break;
     case WM_TRACERT_UPDATE:
         {
-            PPH_STRING windowText = PH_AUTO(PhGetWindowText(context->WindowHandle));
+            PPH_STRING windowText;
 
-            if (windowText)
+            if (windowText = PhGetWindowText(context->WindowHandle))
             {
-                Static_SetText(context->WindowHandle,
-                    PhaFormatString(L"%s Finished.", windowText->Buffer)->Buffer);
+                PPH_STRING text;
+
+                text = PhConcatStrings2(windowText->Buffer, L" Finished.");
+                Static_SetText(context->WindowHandle, text->Buffer);
+
+                PhDereferenceObject(text);
+                PhDereferenceObject(windowText);
+
             }
+        }
+        break;
+    case WM_CONTEXTMENU:
+        {
+            POINT point;
+            PPH_EMENU menu;
+            PPH_EMENU item;
+            CHARRANGE range;
+
+            point.x = GET_X_LPARAM(lParam);
+            point.y = GET_Y_LPARAM(lParam);
+
+            menu = PhCreateEMenu();
+            PhInsertEMenuItem(menu, PhCreateEMenuItem(0, 10, L"&Copy", NULL, NULL), ULONG_MAX);
+            PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+            PhInsertEMenuItem(menu, PhCreateEMenuItem(0, 11, L"&Select all", NULL, NULL), ULONG_MAX);
+
+            memset(&range, 0, sizeof(CHARRANGE));
+            SendMessage(context->RichEditHandle, EM_EXGETSEL, 0, (LPARAM)&range);
+
+            if (range.cpMin == range.cpMax)
+            {
+                if (item = PhFindEMenuItem(menu, PH_EMENU_FIND_DESCEND, NULL, 10))
+                {
+                    PhSetEnabledEMenuItem(item, FALSE);
+                }
+            }
+
+            item = PhShowEMenu(
+                menu,
+                hwndDlg,
+                PH_EMENU_SHOW_SEND_COMMAND | PH_EMENU_SHOW_LEFTRIGHT,
+                PH_ALIGN_LEFT | PH_ALIGN_TOP,
+                point.x,
+                point.y
+                );
+
+            if (item)
+            {
+                switch (item->Id)
+                {
+                case 10:
+                    SendMessage(context->RichEditHandle, WM_COPY, 0, 0);
+                    break;
+                case 11:
+                    SendMessage(context->RichEditHandle, EM_SETSEL, 0, -1);
+                    break;
+                }
+            }
+
+            PhDestroyEMenu(menu);
         }
         break;
     }
@@ -579,15 +789,6 @@ VOID ShowWhoisWindow(
         sizeof(PH_IP_ENDPOINT)
         );
 
-    if (NetworkItem->RemoteEndpoint.Address.Type == PH_IPV4_NETWORK_TYPE)
-    {
-        RtlIpv4AddressToString(&NetworkItem->RemoteEndpoint.Address.InAddr, context->IpAddressString);
-    }
-    else if (NetworkItem->RemoteEndpoint.Address.Type == PH_IPV6_NETWORK_TYPE)
-    {
-        RtlIpv6AddressToString(&NetworkItem->RemoteEndpoint.Address.In6Addr, context->IpAddressString);
-    }
-
     PhCreateThread2(NetworkWhoisDialogThreadStart, (PVOID)context);
 }
 
@@ -605,15 +806,6 @@ VOID ShowWhoisWindowFromAddress(
         &RemoteEndpoint,
         sizeof(PH_IP_ENDPOINT)
         );
-
-    if (RemoteEndpoint.Address.Type == PH_IPV4_NETWORK_TYPE)
-    {
-        RtlIpv4AddressToString(&RemoteEndpoint.Address.InAddr, context->IpAddressString);
-    }
-    else if (RemoteEndpoint.Address.Type == PH_IPV6_NETWORK_TYPE)
-    {
-        RtlIpv6AddressToString(&RemoteEndpoint.Address.In6Addr, context->IpAddressString);
-    }
 
     PhCreateThread2(NetworkWhoisDialogThreadStart, (PVOID)context);
 }

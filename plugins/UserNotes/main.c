@@ -127,19 +127,20 @@ VOID LoadCustomColors(
     PH_STRINGREF part;
 
     settingsString = PhaGetStringSetting(SETTING_NAME_CUSTOM_COLOR_LIST);
-    remaining = settingsString->sr;
 
-    if (remaining.Length == 0)
+    if (PhIsNullOrEmptyString(settingsString))
         return;
 
-    for (ULONG i = 0; i < ARRAYSIZE(ProcessCustomColors); i++)
+    remaining = PhGetStringRef(settingsString);
+
+    for (ULONG i = 0; i < RTL_NUMBER_OF(ProcessCustomColors); i++)
     {
         ULONG64 integer = 0;
 
         if (remaining.Length == 0)
             break;
 
-        PhSplitStringRefAtChar(&remaining, ',', &part, &remaining);
+        PhSplitStringRefAtChar(&remaining, L',', &part, &remaining);
 
         if (PhStringToInteger64(&part, 10, &integer))
         {
@@ -156,7 +157,7 @@ PPH_STRING SaveCustomColors(
 
     PhInitializeStringBuilder(&stringBuilder, 100);
 
-    for (ULONG i = 0; i < ARRAYSIZE(ProcessCustomColors); i++)
+    for (ULONG i = 0; i < RTL_NUMBER_OF(ProcessCustomColors); i++)
     {
         PhAppendFormatStringBuilder(
             &stringBuilder,
@@ -294,7 +295,7 @@ VOID NTAPI LoadCallback(
     directory = PH_AUTO(PhGetApplicationDirectory());
     path = PH_AUTO(PhConcatStringRef2(&directory->sr, &databaseFile));
 
-    if (RtlDoesFileExists_U(path->Buffer))
+    if (PhDoesFileExistsWin32(path->Buffer))
     {
         SetDbPath(path);
     }
@@ -303,7 +304,7 @@ VOID NTAPI LoadCallback(
         path = PhaGetStringSetting(SETTING_NAME_DATABASE_PATH);
         path = PH_AUTO(PhExpandEnvironmentStrings(&path->sr));
 
-        if (RtlDetermineDosPathNameType_U(path->Buffer) == RtlPathTypeRelative)
+        if (PhDetermineDosPathNameType(path->Buffer) == RtlPathTypeRelative)
         {
             directory = PH_AUTO(PhGetApplicationDirectory());
             path = PH_AUTO(PhConcatStringRef2(&directory->sr, &path->sr));
@@ -331,6 +332,9 @@ VOID NTAPI ShowOptionsCallback(
 {
     PPH_PLUGIN_OPTIONS_POINTERS optionsEntry = (PPH_PLUGIN_OPTIONS_POINTERS)Parameter;
 
+    if (!optionsEntry)
+        return;
+
     optionsEntry->CreateSection(
         L"UserNotes",
         PluginInstance->DllBase,
@@ -349,7 +353,7 @@ VOID NTAPI MenuItemCallback(
     PPH_PROCESS_ITEM processItem = PhGetSelectedProcessItem();
     PDB_OBJECT object;
 
-    if (!processItem)
+    if (!(menuItem && processItem))
         return;
 
     switch (menuItem->Id)
@@ -579,7 +583,12 @@ VOID NTAPI MenuHookCallback(
     )
 {
     PPH_PLUGIN_MENU_HOOK_INFORMATION menuHookInfo = Parameter;
-    ULONG id = menuHookInfo->SelectedItem->Id;
+    ULONG id;
+
+    if (!menuHookInfo)
+        return;
+
+    id = menuHookInfo->SelectedItem->Id;
 
     switch (id)
     {
@@ -830,6 +839,9 @@ VOID TreeNewMessageCallback(
 {
     PPH_PLUGIN_TREENEW_MESSAGE message = Parameter;
 
+    if (!message)
+        return;
+
     switch (message->Message)
     {
     case TreeNewGetCellText:
@@ -897,6 +909,9 @@ VOID ProcessPropertiesInitializingCallback(
 {
     PPH_PLUGIN_PROCESS_PROPCONTEXT propContext = Parameter;
 
+    if (!propContext)
+        return;
+
     PhAddProcessPropPage(
         propContext->PropContext,
         PhCreateProcessPropPageContextEx(PluginInstance->DllBase, MAKEINTRESOURCE(IDD_PROCCOMMENT), ProcessCommentPageDlgProc, NULL)
@@ -916,17 +931,17 @@ VOID AddSavePriorityMenuItemsAndHook(
     PPH_EMENU_ITEM saveForCommandLineMenuItem;
     PDB_OBJECT object;
 
-    if (affinityMenuItem = PhFindEMenuItem(MenuInfo->Menu, 0, L"Affinity", PHAPP_ID_PROCESS_AFFINITY))
+    if (affinityMenuItem = PhFindEMenuItem(MenuInfo->Menu, 0, NULL, PHAPP_ID_PROCESS_AFFINITY))
     {
         // HACK: Change default Affinity menu-item into a drop-down list
-        PhInsertEMenuItem(affinityMenuItem, PhCreateEMenuItem(0, affinityMenuItem->Id, L"Set &affinity", NULL, NULL), -1);
+        PhInsertEMenuItem(affinityMenuItem, PhCreateEMenuItem(0, affinityMenuItem->Id, L"Set &affinity", NULL, NULL), ULONG_MAX);
         //PhInsertEMenuItem(affinityMenuItem, PhPluginCreateEMenuItem(PluginInstance, 0, PHAPP_ID_PROCESS_AFFINITY, L"Set &affinity", NULL), PhIndexOfEMenuItem(MenuInfo->Menu, affinityMenuItem) + 1);
         //PhRemoveEMenuItem(affinityMenuItem, affinityMenuItem, 0);
 
         // Insert standard menu-items
-        PhInsertEMenuItem(affinityMenuItem, PhCreateEMenuSeparator(), -1);
-        PhInsertEMenuItem(affinityMenuItem, saveMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_AFFINITY_SAVE_ID, PhaFormatString(L"&Save for %s", ProcessItem->ProcessName->Buffer)->Buffer, NULL), -1);
-        PhInsertEMenuItem(affinityMenuItem, saveForCommandLineMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_AFFINITY_SAVE_FOR_THIS_COMMAND_LINE_ID, L"Save &for this command line", NULL), -1);
+        PhInsertEMenuItem(affinityMenuItem, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(affinityMenuItem, saveMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_AFFINITY_SAVE_ID, PhaFormatString(L"&Save for %s", ProcessItem->ProcessName->Buffer)->Buffer, NULL), ULONG_MAX);
+        PhInsertEMenuItem(affinityMenuItem, saveForCommandLineMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_AFFINITY_SAVE_FOR_THIS_COMMAND_LINE_ID, L"Save &for this command line", NULL), ULONG_MAX);
 
         if (!ProcessItem->CommandLine)
             saveForCommandLineMenuItem->Flags |= PH_EMENU_DISABLED;
@@ -942,11 +957,11 @@ VOID AddSavePriorityMenuItemsAndHook(
     }
 
     // Priority
-    if (priorityMenuItem = PhFindEMenuItem(MenuInfo->Menu, 0, L"Priority", 0))
+    if (priorityMenuItem = PhFindEMenuItem(MenuInfo->Menu, 0, NULL, PHAPP_ID_PROCESS_PRIORITY))
     {
-        PhInsertEMenuItem(priorityMenuItem, PhCreateEMenuSeparator(), -1);
-        PhInsertEMenuItem(priorityMenuItem, saveMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_PRIORITY_SAVE_ID, PhaFormatString(L"&Save for %s", ProcessItem->ProcessName->Buffer)->Buffer, NULL), -1);
-        PhInsertEMenuItem(priorityMenuItem, saveForCommandLineMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_PRIORITY_SAVE_FOR_THIS_COMMAND_LINE_ID, L"Save &for this command line", NULL), -1);
+        PhInsertEMenuItem(priorityMenuItem, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(priorityMenuItem, saveMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_PRIORITY_SAVE_ID, PhaFormatString(L"&Save for %s", ProcessItem->ProcessName->Buffer)->Buffer, NULL), ULONG_MAX);
+        PhInsertEMenuItem(priorityMenuItem, saveForCommandLineMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_PRIORITY_SAVE_FOR_THIS_COMMAND_LINE_ID, L"Save &for this command line", NULL), ULONG_MAX);
 
         if (!ProcessItem->CommandLine)
             saveForCommandLineMenuItem->Flags |= PH_EMENU_DISABLED;
@@ -962,11 +977,11 @@ VOID AddSavePriorityMenuItemsAndHook(
     }
 
     // I/O Priority
-    if (ioPriorityMenuItem = PhFindEMenuItem(MenuInfo->Menu, 0, L"I/O Priority", 0))
+    if (ioPriorityMenuItem = PhFindEMenuItem(MenuInfo->Menu, 0, NULL, PHAPP_ID_PROCESS_IOPRIORITY))
     {
-        PhInsertEMenuItem(ioPriorityMenuItem, PhCreateEMenuSeparator(), -1);
-        PhInsertEMenuItem(ioPriorityMenuItem, saveMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_IO_PRIORITY_SAVE_ID, PhaFormatString(L"&Save for %s", ProcessItem->ProcessName->Buffer)->Buffer, NULL), -1);
-        PhInsertEMenuItem(ioPriorityMenuItem, saveForCommandLineMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_IO_PRIORITY_SAVE_FOR_THIS_COMMAND_LINE_ID, L"Save &for this command line", NULL), -1);
+        PhInsertEMenuItem(ioPriorityMenuItem, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(ioPriorityMenuItem, saveMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_IO_PRIORITY_SAVE_ID, PhaFormatString(L"&Save for %s", ProcessItem->ProcessName->Buffer)->Buffer, NULL), ULONG_MAX);
+        PhInsertEMenuItem(ioPriorityMenuItem, saveForCommandLineMenuItem = PhPluginCreateEMenuItem(PluginInstance, 0, PROCESS_IO_PRIORITY_SAVE_FOR_THIS_COMMAND_LINE_ID, L"Save &for this command line", NULL), ULONG_MAX);
 
         if (!ProcessItem->CommandLine)
             saveForCommandLineMenuItem->Flags |= PH_EMENU_DISABLED;
@@ -997,6 +1012,9 @@ VOID ProcessMenuInitializingCallback(
     PPH_EMENU_ITEM highlightMenuItem;
     PDB_OBJECT object;
 
+    if (!Parameter)
+        return;
+
     if (menuInfo->u.Process.NumberOfProcesses != 1)
         return;
 
@@ -1005,7 +1023,7 @@ VOID ProcessMenuInitializingCallback(
     if (!PH_IS_FAKE_PROCESS_ID(processItem->ProcessId) && processItem->ProcessId != SYSTEM_IDLE_PROCESS_ID && processItem->ProcessId != SYSTEM_PROCESS_ID)
         AddSavePriorityMenuItemsAndHook(menuInfo, processItem, TRUE);
 
-    if (!(miscMenuItem = PhFindEMenuItem(menuInfo->Menu, 0, L"Miscellaneous", 0)))
+    if (!(miscMenuItem = PhFindEMenuItem(menuInfo->Menu, 0, NULL, PHAPP_ID_PROCESS_MISCELLANEOUS)))
         return;
 
     LockDb();
@@ -1054,6 +1072,9 @@ VOID ProcessTreeNewInitializingCallback(
     PPH_PLUGIN_TREENEW_INFORMATION info = Parameter;
     PH_TREENEW_COLUMN column;
 
+    if (!Parameter)
+        return;
+
     ProcessTreeNewHandle = info->TreeNewHandle;
 
     memset(&column, 0, sizeof(PH_TREENEW_COLUMN));
@@ -1070,8 +1091,13 @@ VOID GetProcessHighlightingColorCallback(
     )
 {
     PPH_PLUGIN_GET_HIGHLIGHTING_COLOR getHighlightingColor = Parameter;
-    PPH_PROCESS_ITEM processItem = (PPH_PROCESS_ITEM)getHighlightingColor->Parameter;
+    PPH_PROCESS_ITEM processItem;
     PDB_OBJECT object;
+
+    if (!Parameter)
+        return;
+
+    processItem = (PPH_PROCESS_ITEM)getHighlightingColor->Parameter;
 
     if (getHighlightingColor->Handled)
         return;
@@ -1095,6 +1121,9 @@ VOID ServicePropertiesInitializingCallback(
 {
     PPH_PLUGIN_OBJECT_PROPERTIES objectProperties = Parameter;
     PROPSHEETPAGE propSheetPage;
+
+    if (!Parameter)
+        return;
 
     if (objectProperties->NumberOfPages < objectProperties->MaximumNumberOfPages)
     {
@@ -1137,6 +1166,9 @@ VOID ServiceTreeNewInitializingCallback(
     PPH_PLUGIN_TREENEW_INFORMATION info = Parameter;
     PH_TREENEW_COLUMN column;
 
+    if (!info)
+        return;
+
     ServiceTreeNewHandle = info->TreeNewHandle;
 
     memset(&column, 0, sizeof(PH_TREENEW_COLUMN));
@@ -1153,7 +1185,12 @@ VOID MiListSectionMenuInitializingCallback(
     )
 {
     PPH_PLUGIN_MENU_INFORMATION menuInfo = Parameter;
-    PPH_PROCESS_ITEM processItem = menuInfo->u.MiListSection.ProcessGroup->Representative;
+    PPH_PROCESS_ITEM processItem;
+
+    if (!menuInfo)
+        return;
+
+    processItem = menuInfo->u.MiListSection.ProcessGroup->Representative;
 
     if (PH_IS_FAKE_PROCESS_ID(processItem->ProcessId) || processItem->ProcessId == SYSTEM_IDLE_PROCESS_ID || processItem->ProcessId == SYSTEM_PROCESS_ID)
         return;
@@ -1167,8 +1204,12 @@ VOID ProcessModifiedCallback(
     )
 {
     PPH_PROCESS_ITEM processItem = Parameter;
-    PPROCESS_EXTENSION extension = PhPluginGetObjectExtension(PluginInstance, processItem, EmProcessItemType);
+    PPROCESS_EXTENSION extension;
 
+    if (!processItem)
+        return;
+
+    extension = PhPluginGetObjectExtension(PluginInstance, processItem, EmProcessItemType);
     extension->Valid = FALSE;
 }
 
@@ -1537,7 +1578,7 @@ LOGICAL DllMain(
             ServiceItemDeleteCallback
             );
 
-        PhAddSettings(settings, ARRAYSIZE(settings));
+        PhAddSettings(settings, RTL_NUMBER_OF(settings));
     }
 
     return TRUE;

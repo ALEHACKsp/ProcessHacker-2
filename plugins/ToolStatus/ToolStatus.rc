@@ -45,45 +45,6 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 //
-// Version
-//
-
-VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,4,0,0
- PRODUCTVERSION 2,4,0,0
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0x1L
-#else
- FILEFLAGS 0x0L
-#endif
- FILEOS 0x40004L
- FILETYPE 0x2L
- FILESUBTYPE 0x0L
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "0c0904b0"
-        BEGIN
-            VALUE "CompanyName", "dmex"
-            VALUE "FileDescription", "ToolStatus plugin for Process Hacker"
-            VALUE "FileVersion", "2.4"
-            VALUE "InternalName", "ProcessHacker.ToolStatus"
-            VALUE "LegalCopyright", "Licensed under the GNU GPL, v3."
-            VALUE "OriginalFilename", "ToolStatus.dll"
-            VALUE "ProductName", "ToolStatus plugin for Process Hacker"
-            VALUE "ProductVersion", "2.4"
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0xc09, 1200
-    END
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
 // Dialog
 //
 
@@ -98,7 +59,8 @@ BEGIN
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,32,152,10
     CONTROL         "Auto-hide main menu (Alt or F10 key toggle)",IDC_ENABLE_AUTOHIDE_MENU,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,44,157,10
-    LTEXT           "Note: Right-click the toolbar on the main window to customize the icons and graphs.",IDC_STATIC,7,59,157,18
+    CONTROL         "Enable auto focus to search box",IDC_ENABLE_AUTOFOCUS_SEARCH,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,56,113,10
+    LTEXT           "Note: Right-click the toolbar on the main window to customize the icons and graphs.",IDC_STATIC,7,68,157,18
 END
 
 IDD_CUSTOMIZE_TB DIALOGEX 0, 0, 369, 188

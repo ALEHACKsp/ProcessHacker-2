@@ -4,7 +4,6 @@
 //
 #define IDR_RT_MANIFEST                 1
 #define IDI_PROCESSHACKER               101
-#define IDR_MAINWND                     102
 #define IDR_MAINWND_ACCEL               102
 #define IDD_PROCGENERAL                 103
 #define IDD_PROCMODULES                 104
@@ -12,23 +11,17 @@
 #define IDD_PROCHANDLES                 106
 #define IDD_PROCENVIRONMENT             107
 #define IDD_THRDSTACK                   108
-#define IDR_THREAD                      110
-#define IDR_HANDLE                      111
-#define IDR_MODULE                      112
 #define IDC_CPU                         112
 #define IDC_PRIVATEBYTES                113
 #define IDC_IO                          114
 #define IDB_CROSS                       117
 #define IDB_TICK                        118
 #define IDC_PHYSICAL                    119
-#define IDR_COMPUTER                    120
 #define IDC_MEMORY                      120
 #define IDD_ABOUT                       121
 #define IDC_NEWOBJECTS                  121
 #define IDC_REMOVEDOBJECTS              122
-#define IDR_PROCESS                     123
 #define IDC_CPUUSER                     123
-#define IDR_SERVICE                     124
 #define IDC_CPUKERNEL                   124
 #define IDC_IORO                        125
 #define IDD_SRVLIST                     125
@@ -40,7 +33,6 @@
 #define IDD_OBJTOKEN                    131
 #define ID_PLUGIN_MENU_ITEM             131
 #define IDC_SEPARATOR                   133
-#define IDR_FINDOBJ                     134
 #define IDD_HIDDENPROCESSES             135
 #define ID_TRAYICONS_REGISTERED         135
 #define IDD_RUNAS                       136
@@ -59,14 +51,12 @@
 #define IDD_OBJSECTION                  148
 #define IDD_AFFINITY                    149
 #define IDD_SYSINFO                     150
-#define IDR_USER                        151
 #define IDD_EDITMESSAGE                 152
 #define IDD_SESSION                     153
 #define IDD_PROCMEMORY                  154
 #define IDD_CHOOSE                      155
 #define IDD_OPTGENERAL                  162
 #define IDD_OPTHIGHLIGHTING             163
-#define IDR_NETWORK                     164
 #define IDD_CHOOSECOLUMNS               166
 #define IDD_NETSTACK                    167
 #define IDD_CREATESERVICE               168
@@ -74,14 +64,11 @@
 #define ID_SHOWCONTEXTMENU              169
 #define IDD_PROCSTATISTICS              170
 #define IDD_OPTADVANCED                 171
-#define IDR_ICON                        173
 #define IDD_GDIHANDLES                  175
 #define IDD_LOG                         178
 #define IDD_MEMEDIT                     180
-#define IDR_MEMORY                      181
 #define IDD_MEMPROTECT                  182
 #define IDD_MEMRESULTS                  183
-#define IDR_MEMFILTER                   184
 #define IDD_MEMSTRING                   185
 #define IDD_OPTGRAPHS                   186
 #define IDD_PLUGINS                     187
@@ -105,12 +92,9 @@
 #define IDD_SYSINFO_IO                  200
 #define IDD_SYSINFO_IOPANEL             201
 #define IDD_MEMLISTS                    202
-#define IDR_EMPTYMEMLISTS               204
 #define IDD_CONTAINER                   205
 #define IDD_MINIINFO                    207
 #define IDD_MINIINFO_LIST               210
-#define IDR_MINIINFO                    211
-#define IDR_MINIINFO_PROCESS            212
 #define IDD_MITIGATION                  215
 #define IDI_PIN                         216
 #define IDI_FOLDER                      217
@@ -128,6 +112,8 @@
 #define IDD_COLUMNSETS                  243
 #define ID_VIEW_TRAYICONS               244
 #define IDD_OBJFILE                     249
+#define IDD_RUNFILEDLG                  253
+#define IDD_LIVEDUMP                    254
 #define IDC_TERMINATE                   1003
 #define IDC_FILEICON                    1005
 #define IDC_FILE                        1006
@@ -150,6 +136,7 @@
 #define IDC_PAUSE                       1027
 #define IDC_PROTECTION                  1027
 #define IDC_START                       1028
+#define IDC_FILENAMEWIN32               1028
 #define IDC_DESCRIPTION                 1029
 #define IDC_TYPE                        1032
 #define IDC_STARTTYPE                   1033
@@ -230,6 +217,7 @@
 #define IDC_VIEWPARENTPROCESS           1081
 #define IDC_OPENFILENAME                1082
 #define IDC_LIMITS                      1083
+#define IDC_OPENFILENAME2               1083
 #define IDC_SIGNALED                    1084
 #define IDC_SET                         1085
 #define IDC_RESET                       1086
@@ -413,6 +401,7 @@
 #define IDC_CLEANUP                     1251
 #define IDC_TOGGLEELEVATION             1254
 #define IDC_TOGGLESUSPENDED             1255
+#define IDC_TRUSTEDINSTALLER            1255
 #define IDC_PARENT                      1263
 #define IDC_PROCESSNAME                 1264
 #define IDC_SERVICES_LAYOUT             1266
@@ -512,12 +501,15 @@
 #define IDC_ZLISTSTANDBY7_V             1367
 #define IDC_INSPECT                     1367
 #define IDC_ZPAGINGPAGEFAULTSDELTA_V    1368
+#define IDC_INSPECT2                    1368
 #define IDC_ZPAGINGPAGEREADSDELTA_V     1369
 #define IDC_BYTESPERROW                 1369
 #define IDC_ZPAGINGPAGEFILEWRITESDELTA_V 1370
 #define IDC_PINWINDOW                   1370
 #define IDC_ZPAGINGMAPPEDWRITESDELTA_V  1371
+#define IDC_ZMAPPEDREADIO               1372
 #define IDC_ZLISTMODIFIEDPAGEFILE_V     1373
+#define IDC_ZMAPPEDWRITEIO              1374
 #define IDC_SECTION                     1375
 #define IDC_REGEX                       1377
 #define IDC_DESCRIPTIONLABEL            1378
@@ -545,6 +537,10 @@
 #define IDC_FILETYPE                    1409
 #define IDC_FILEMODE                    1410
 #define IDC_DEFAULTPERM                 1410
+#define IDC_DUMPSTACK                   1411
+#define IDC_COMPRESS                    1412
+#define IDC_USERMODE                    1413
+#define IDC_HYPERVISOR                  1414
 #define ID_HACKER_EXIT                  40001
 #define ID_PROCESS_PROPERTIES           40006
 #define ID_PROCESS_TERMINATE            40007
@@ -572,8 +568,13 @@
 #define ID_PROCESS_VIRTUALIZATION       40034
 #define ID_PROCESS_AFFINITY             40035
 #define ID_PROCESS_CREATEDUMPFILE       40036
+#define ID_PROCESS_PRIORITY             40037
 #define ID_MISCELLANEOUS_SETCRITICAL    40038
 #define ID_MISCELLANEOUS_DETACHFROMDEBUGGER 40039
+#define ID_PROCESS_IOPRIORITY           40040
+#define ID_PROCESS_MISCELLANEOUS        40041
+#define ID_PROCESS_WINDOW               40042
+#define ID_PROCESS_PAGEPRIORITY         40043
 #define ID_PRIORITY_REALTIME            40048
 #define ID_PRIORITY_HIGH                40049
 #define ID_WINDOW_BRINGTOFRONT          40055
@@ -622,14 +623,12 @@
 #define ID_OBJECT_CLOSE                 40119
 #define ID_OBJECT_PROPERTIES            40120
 #define ID_HELP_DEBUGCONSOLE            40122
-#define ID_MODULE_SEARCHONLINE          40125
 #define ID_TOOLS_PAGEFILES              40126
 #define ID_USER_DISCONNECT              40127
 #define ID_USER_LOGOFF                  40128
 #define ID_USER_SENDMESSAGE             40129
 #define ID_USER_PROPERTIES              40130
 #define ID_USERS_DUMMY                  40131
-#define ID_MODULE_INSPECT               40132
 #define ID_PROCESS_DEBUG                40133
 #define ID_USER_CONNECT                 40138
 #define ID_NETWORK_GOTOPROCESS          40139
@@ -750,6 +749,7 @@
 #define ID_TOOLS_SCM_PERMISSIONS        40300
 #define ID_TOOLS_RDP_PERMISSIONS        40301
 #define ID_UIACCESS_REMOVE              40302
+#define ID_TOOLS_LIVEDUMP               40303
 #define IDDYNAMIC                       50000
 #define IDPLUGINS                       55000
 
@@ -757,7 +757,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        254
+#define _APS_NEXT_RESOURCE_VALUE        257
 #define _APS_NEXT_COMMAND_VALUE         40298
 #define _APS_NEXT_CONTROL_VALUE         1410
 #define _APS_NEXT_SYMED_VALUE           170

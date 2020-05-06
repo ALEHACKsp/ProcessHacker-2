@@ -76,10 +76,12 @@ VOID PhSipOnThemeChanged(
     );
 
 VOID PhSipOnCommand(
+    _In_ HWND HwndControl,
     _In_ ULONG Id,
     _In_ ULONG Code
     );
 
+_Success_(return)
 BOOLEAN PhSipOnNotify(
     _In_ NMHDR *Header,
     _Out_ LRESULT *Result
@@ -211,11 +213,6 @@ VOID NTAPI PhSipSysInfoUpdateHandler(
     _In_opt_ PVOID Context
     );
 
-PPH_STRING PhSipFormatSizeWithPrecision(
-    _In_ ULONG64 Size,
-    _In_ USHORT Precision
-    );
-
 // CPU section
 
 BOOLEAN PhSipCpuSectionCallback(
@@ -284,10 +281,11 @@ PPH_STRING PhSipGetMaxCpuString(
     _In_ LONG Index
     );
 
-VOID PhSipGetCpuBrandString(
-    _Out_writes_(49) PWSTR BrandString
+PPH_STRING PhSipGetCpuBrandString(
+    VOID
     );
 
+_Success_(return)
 BOOLEAN PhSipGetCpuFrequencyFromDistribution(
     _Out_ DOUBLE *Fraction
     );
@@ -331,6 +329,10 @@ INT_PTR CALLBACK PhSipMemoryPanelDialogProc(
     _In_ LPARAM lParam
     );
 
+VOID PhSipCreateMemoryGraphs(
+    VOID
+    );
+
 VOID PhSipLayoutMemoryGraphs(
     VOID
     );
@@ -358,6 +360,11 @@ NTSTATUS PhSipLoadMmAddresses(
 VOID PhSipGetPoolLimits(
     _Out_ PSIZE_T Paged,
     _Out_ PSIZE_T NonPaged
+    );
+
+BOOLEAN PhSipGetMemoryLimits(
+    _Out_ PULONGLONG TotalMemory,
+    _Out_ PULONGLONG ReservedMemory
     );
 
 // I/O section
@@ -393,6 +400,10 @@ INT_PTR CALLBACK PhSipIoPanelDialogProc(
     _In_ UINT uMsg,
     _In_ WPARAM wParam,
     _In_ LPARAM lParam
+    );
+
+VOID PhSipCreateIoGraph(
+    VOID
     );
 
 VOID PhSipNotifyIoGraph(

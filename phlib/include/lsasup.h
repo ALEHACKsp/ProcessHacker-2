@@ -21,6 +21,7 @@ PhGetLookupPolicyHandle(
     VOID
     );
 
+_Success_(return)
 PHLIBAPI
 BOOLEAN
 NTAPI
@@ -29,6 +30,7 @@ PhLookupPrivilegeName(
     _Out_ PPH_STRING *PrivilegeName
     );
 
+_Success_(return)
 PHLIBAPI
 BOOLEAN
 NTAPI
@@ -37,6 +39,7 @@ PhLookupPrivilegeDisplayName(
     _Out_ PPH_STRING *PrivilegeDisplayName
     );
 
+_Success_(return)
 PHLIBAPI
 BOOLEAN
 NTAPI
@@ -53,6 +56,15 @@ PhLookupSid(
     _Out_opt_ PPH_STRING *Name,
     _Out_opt_ PPH_STRING *DomainName,
     _Out_opt_ PSID_NAME_USE NameUse
+    );
+
+PHLIBAPI
+VOID
+NTAPI
+PhLookupSids(
+    _In_ ULONG Count,
+    _In_ PSID *Sids,
+    _Out_ PPH_STRING **FullNames
     );
 
 PHLIBAPI
@@ -87,6 +99,14 @@ NTAPI
 PhGetTokenUserString(
     _In_ HANDLE TokenHandle,
     _In_ BOOLEAN IncludeDomain
+    );
+
+PHLIBAPI
+NTSTATUS
+NTAPI
+PhGetAccountPrivileges(
+    _In_ PSID AccountSid,
+    _Out_ PTOKEN_PRIVILEGES* Privileges
     );
 
 PHLIBAPI

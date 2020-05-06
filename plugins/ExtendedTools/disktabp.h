@@ -8,27 +8,6 @@ BOOLEAN EtpDiskPageCallback(
     _In_opt_ PVOID Parameter2
     );
 
-VOID NTAPI EtpDiskTabSelectionChangedCallback(
-    _In_ PVOID Parameter1,
-    _In_ PVOID Parameter2,
-    _In_ PVOID Parameter3,
-    _In_ PVOID Context
-    );
-
-VOID NTAPI EtpDiskTabSaveContentCallback(
-    _In_ PVOID Parameter1,
-    _In_ PVOID Parameter2,
-    _In_ PVOID Parameter3,
-    _In_ PVOID Context
-    );
-
-VOID NTAPI EtpDiskTabFontChangedCallback(
-    _In_ PVOID Parameter1,
-    _In_ PVOID Parameter2,
-    _In_ PVOID Parameter3,
-    _In_ PVOID Context
-    );
-
 BOOLEAN EtpDiskNodeHashtableEqualFunction(
     _In_ PVOID Entry1,
     _In_ PVOID Entry2
@@ -59,7 +38,7 @@ VOID EtUpdateDiskNode(
     );
 
 BOOLEAN NTAPI EtpDiskTreeNewCallback(
-    _In_ HWND hwnd,
+    _In_ HWND WindowHandle,
     _In_ PH_TREENEW_MESSAGE Message,
     _In_opt_ PVOID Parameter1,
     _In_opt_ PVOID Parameter2,
@@ -97,6 +76,7 @@ VOID EtWriteDiskList(
     );
 
 VOID EtHandleDiskCommand(
+    _In_ HWND WindowHandle,
     _In_ ULONG Id
     );
 
@@ -131,20 +111,8 @@ VOID NTAPI EtpDiskItemsUpdatedHandler(
     _In_opt_ PVOID Context
     );
 
-VOID NTAPI EtpOnDiskItemAdded(
-    _In_ PVOID Parameter
-    );
-
-VOID NTAPI EtpOnDiskItemModified(
-    _In_ PVOID Parameter
-    );
-
-VOID NTAPI EtpOnDiskItemRemoved(
-    _In_ PVOID Parameter
-    );
-
 VOID NTAPI EtpOnDiskItemsUpdated(
-    _In_ PVOID Parameter
+    _In_ ULONG RunId
     );
 
 VOID NTAPI EtpSearchChangedHandler(
@@ -163,13 +131,6 @@ VOID NTAPI EtpToolStatusActivateContent(
 
 HWND NTAPI EtpToolStatusGetTreeNewHandle(
     VOID
-    );
-
-INT_PTR CALLBACK EtpDiskTabErrorDialogProc(
-    _In_ HWND hwndDlg,
-    _In_ UINT uMsg,
-    _In_ WPARAM wParam,
-    _In_ LPARAM lParam
     );
 
 #endif

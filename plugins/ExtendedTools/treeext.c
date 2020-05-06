@@ -3,6 +3,7 @@
  *   process and network tree support
  *
  * Copyright (C) 2011 wj32
+ * Copyright (C) 2011-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -142,7 +143,7 @@ VOID EtProcessTreeNewInitializing(
     PPH_PLUGIN_TREENEW_INFORMATION treeNewInfo = Parameter;
     ULONG i;
 
-    for (i = 0; i < sizeof(columns) / sizeof(COLUMN_INFO); i++)
+    for (i = 0; i < RTL_NUMBER_OF(columns); i++)
     {
         EtpAddTreeNewColumn(treeNewInfo, columns[i].SubId, columns[i].Text, columns[i].Width, columns[i].Alignment,
             columns[i].TextFlags, columns[i].SortDescending, EtpProcessTreeNewSortFunction);
@@ -208,11 +209,9 @@ static VOID PhpAggregateField(
     _Inout_ PVOID AggregatedValue
     )
 {
-    ULONG i;
-
     PhpAccumulateField(AggregatedValue, PhpFieldForAggregate(ProcessNode, Location, FieldOffset), Type);
 
-    for (i = 0; i < ProcessNode->Children->Count; i++)
+    for (ULONG i = 0; i < ProcessNode->Children->Count; i++)
     {
         PhpAggregateField(ProcessNode->Children->Items[i], Type, Location, FieldOffset, AggregatedValue);
     }
@@ -276,11 +275,11 @@ VOID EtProcessTreeNewMessage(
                 break;
             case ETPRTNC_DISKREADBYTES:
                 if (block->DiskReadRaw != 0)
-                    text = PhFormatSize(block->DiskReadRaw, -1);
+                    text = PhFormatSize(block->DiskReadRaw, ULONG_MAX);
                 break;
             case ETPRTNC_DISKWRITEBYTES:
                 if (block->DiskWriteRaw != 0)
-                    text = PhFormatSize(block->DiskWriteRaw, -1);
+                    text = PhFormatSize(block->DiskWriteRaw, ULONG_MAX);
                 break;
             case ETPRTNC_DISKTOTALBYTES:
                 {
@@ -303,18 +302,18 @@ VOID EtProcessTreeNewMessage(
                 break;
             case ETPRTNC_DISKREADBYTESDELTA:
                 if (block->DiskReadRawDelta.Delta != 0)
-                    text = PhFormatSize(block->DiskReadRawDelta.Delta, -1);
+                    text = PhFormatSize(block->DiskReadRawDelta.Delta, ULONG_MAX);
                 break;
             case ETPRTNC_DISKWRITEBYTESDELTA:
                 if (block->DiskWriteRawDelta.Delta != 0)
-                    text = PhFormatSize(block->DiskWriteRawDelta.Delta, -1);
+                    text = PhFormatSize(block->DiskWriteRawDelta.Delta, ULONG_MAX);
                 break;
             case ETPRTNC_DISKTOTALBYTESDELTA:
                 {
                     ULONG64 number = 0;
 
-                    PhpAggregateFieldIfNeeded(processNode, AggregateTypeInt64, AggregateLocationProcessItem, FIELD_OFFSET(ET_PROCESS_BLOCK, DiskReadRawDelta), &number);
-                    PhpAggregateFieldIfNeeded(processNode, AggregateTypeInt64, AggregateLocationProcessItem, FIELD_OFFSET(ET_PROCESS_BLOCK, DiskWriteRawDelta), &number);
+                    PhpAggregateFieldIfNeeded(processNode, AggregateTypeInt64, AggregateLocationProcessItem, FIELD_OFFSET(ET_PROCESS_BLOCK, DiskReadRawDelta.Delta), &number);
+                    PhpAggregateFieldIfNeeded(processNode, AggregateTypeInt64, AggregateLocationProcessItem, FIELD_OFFSET(ET_PROCESS_BLOCK, DiskWriteRawDelta.Delta), &number);
 
                     if (number != 0)
                         text = PhFormatSize(number, ULONG_MAX);
@@ -330,11 +329,11 @@ VOID EtProcessTreeNewMessage(
                 break;
             case ETPRTNC_NETWORKRECEIVEBYTES:
                 if (block->NetworkReceiveRaw != 0)
-                    text = PhFormatSize(block->NetworkReceiveRaw, -1);
+                    text = PhFormatSize(block->NetworkReceiveRaw, ULONG_MAX);
                 break;
             case ETPRTNC_NETWORKSENDBYTES:
                 if (block->NetworkSendRaw != 0)
-                    text = PhFormatSize(block->NetworkSendRaw, -1);
+                    text = PhFormatSize(block->NetworkSendRaw, ULONG_MAX);
                 break;
             case ETPRTNC_NETWORKTOTALBYTES:
                 {
@@ -357,11 +356,11 @@ VOID EtProcessTreeNewMessage(
                 break;
             case ETPRTNC_NETWORKRECEIVEBYTESDELTA:
                 if (block->NetworkReceiveRawDelta.Delta != 0)
-                    text = PhFormatSize(block->NetworkReceiveRawDelta.Delta, -1);
+                    text = PhFormatSize(block->NetworkReceiveRawDelta.Delta, ULONG_MAX);
                 break;
             case ETPRTNC_NETWORKSENDBYTESDELTA:
                 if (block->NetworkSendRawDelta.Delta != 0)
-                    text = PhFormatSize(block->NetworkSendRawDelta.Delta, -1);
+                    text = PhFormatSize(block->NetworkSendRawDelta.Delta, ULONG_MAX);
                 break;
             case ETPRTNC_NETWORKTOTALBYTESDELTA:
                 {
@@ -719,15 +718,15 @@ VOID EtNetworkTreeNewMessage(
                 break;
             case ETNETNC_RECEIVEBYTES:
                 if (block->ReceiveRaw != 0)
-                    text = PhFormatSize(block->ReceiveRaw, -1);
+                    text = PhFormatSize(block->ReceiveRaw, ULONG_MAX);
                 break;
             case ETNETNC_SENDBYTES:
                 if (block->SendRaw != 0)
-                    text = PhFormatSize(block->SendRaw, -1);
+                    text = PhFormatSize(block->SendRaw, ULONG_MAX);
                 break;
             case ETNETNC_TOTALBYTES:
                 if (block->ReceiveRaw + block->SendRaw != 0)
-                    text = PhFormatSize(block->ReceiveRaw + block->SendRaw, -1);
+                    text = PhFormatSize(block->ReceiveRaw + block->SendRaw, ULONG_MAX);
                 break;
             case ETNETNC_RECEIVESDELTA:
                 if (block->ReceiveDelta.Delta != 0)
@@ -739,15 +738,15 @@ VOID EtNetworkTreeNewMessage(
                 break;
             case ETNETNC_RECEIVEBYTESDELTA:
                 if (block->ReceiveRawDelta.Delta != 0)
-                    text = PhFormatSize(block->ReceiveRawDelta.Delta, -1);
+                    text = PhFormatSize(block->ReceiveRawDelta.Delta, ULONG_MAX);
                 break;
             case ETNETNC_SENDBYTESDELTA:
                 if (block->SendRawDelta.Delta != 0)
-                    text = PhFormatSize(block->SendRawDelta.Delta, -1);
+                    text = PhFormatSize(block->SendRawDelta.Delta, ULONG_MAX);
                 break;
             case ETNETNC_TOTALBYTESDELTA:
                 if (block->ReceiveRawDelta.Delta + block->SendRawDelta.Delta != 0)
-                    text = PhFormatSize(block->ReceiveRawDelta.Delta + block->SendRawDelta.Delta, -1);
+                    text = PhFormatSize(block->ReceiveRawDelta.Delta + block->SendRawDelta.Delta, ULONG_MAX);
                 break;
             case ETNETNC_FIREWALLSTATUS:
                 {
@@ -881,7 +880,7 @@ ET_FIREWALL_STATUS EtQueryFirewallStatus(
 
     if (!manager)
     {
-        if (!SUCCEEDED(CoCreateInstance(&CLSID_NetFwMgr_I, NULL, CLSCTX_INPROC_SERVER, &IID_INetFwMgr_I, &manager)))
+        if (!SUCCEEDED(PhGetClassObject(L"firewallapi.dll", &CLSID_NetFwMgr_I, &IID_INetFwMgr_I, &manager)))
             return FirewallUnknownStatus;
 
         if (!manager)
@@ -893,7 +892,7 @@ ET_FIREWALL_STATUS EtQueryFirewallStatus(
     if (!processItem)
         return FirewallUnknownStatus;
 
-    if (!processItem->FileName)
+    if (!processItem->FileNameWin32)
     {
         PhDereferenceObject(processItem);
         return FirewallUnknownStatus;
@@ -901,7 +900,7 @@ ET_FIREWALL_STATUS EtQueryFirewallStatus(
 
     result = FirewallUnknownStatus;
 
-    if (imageFileNameBStr = SysAllocStringLen(processItem->FileName->Buffer, (ULONG)processItem->FileName->Length / sizeof(WCHAR)))
+    if (imageFileNameBStr = SysAllocStringLen(processItem->FileNameWin32->Buffer, (ULONG)processItem->FileNameWin32->Length / sizeof(WCHAR)))
     {
         localAddressBStr = NULL;
 

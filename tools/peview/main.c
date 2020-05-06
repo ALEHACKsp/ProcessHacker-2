@@ -3,6 +3,7 @@
  *   PE viewer
  *
  * Copyright (C) 2010 wj32
+ * Copyright (C) 2017-2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -21,11 +22,10 @@
  */
 
 #include <peview.h>
-#include <objbase.h>
 
 PPH_STRING PvFileName = NULL;
 
-static BOOLEAN NTAPI PvCommandLineCallback(
+BOOLEAN NTAPI PvpCommandLineCallback(
     _In_opt_ PPH_COMMAND_LINE_OPTION Option,
     _In_opt_ PPH_STRING Value,
     _In_opt_ PVOID Context
@@ -49,8 +49,6 @@ INT WINAPI wWinMain(
         { 0, L"h", NoArgumentType }
     };
     PPH_STRING commandLine;
-
-    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
     if (!NT_SUCCESS(PhInitializePhLibEx(L"PE Viewer", ULONG_MAX, hInstance, 0, 0)))
         return 1;
@@ -112,9 +110,9 @@ INT WINAPI wWinMain(
     PhParseCommandLine(
         &commandLine->sr,
         options,
-        sizeof(options) / sizeof(PH_COMMAND_LINE_OPTION),
+        RTL_NUMBER_OF(options),
         PH_COMMAND_LINE_IGNORE_FIRST_PART,
-        PvCommandLineCallback,
+        PvpCommandLineCallback,
         NULL
         );
     PhDereferenceObject(commandLine);
@@ -128,7 +126,8 @@ INT WINAPI wWinMain(
         };
         PVOID fileDialog;
 
-        CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        if (!SUCCEEDED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE)))
+            return 1;
 
         fileDialog = PhCreateOpenFileDialog();
         PhSetFileDialogOptions(fileDialog, PH_FILEDIALOG_NOPATHVALIDATE);
@@ -136,13 +135,38 @@ INT WINAPI wWinMain(
 
         if (PhShowFileDialog(NULL, fileDialog))
         {
-            PvFileName = PhGetFileDialogFileName(fileDialog);
+            if (PvFileName = PhGetFileDialogFileName(fileDialog))
+            {
+#ifndef DEBUG
+                PPH_STRING applicationFileName;
+
+                if (applicationFileName = PhGetApplicationFileName())
+                {
+                    PhMoveReference(&PvFileName, PhConcatStrings(3, L"\"", PvFileName->Buffer, L"\""));
+
+                    if (PhShellExecuteEx(
+                        NULL,
+                        PhGetString(applicationFileName),
+                        PvFileName->Buffer,
+                        SW_SHOWDEFAULT,
+                        PH_SHELL_EXECUTE_NOZONECHECKS,
+                        0,
+                        NULL
+                        ))
+                    {
+                        RtlExitUserProcess(STATUS_SUCCESS);
+                    }
+
+                    PhDereferenceObject(applicationFileName);
+                }
+#endif
+            }
         }
 
         PhFreeFileDialog(fileDialog);
     }
 
-    if (!PvFileName)
+    if (PhIsNullOrEmptyString(PvFileName))
         return 1;
 
     if (PhEndsWithString2(PvFileName, L".lnk", TRUE))

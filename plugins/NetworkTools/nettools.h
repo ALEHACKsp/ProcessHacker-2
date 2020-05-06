@@ -3,7 +3,7 @@
  *   Main header
  *
  * Copyright (C) 2010-2013 wj32
- * Copyright (C) 2012-2017 dmex
+ * Copyright (C) 2012-2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -32,8 +32,6 @@
 
 #include <icmpapi.h>
 #include <shlobj.h>
-
-#include <http.h>
 
 #include "resource.h"
 
@@ -264,27 +262,32 @@ typedef enum _NETWORK_COLUMN_ID
 // country.c
 
 PPH_STRING NetToolsGetGeoLiteDbPath(
-    VOID
+    _In_ PWSTR SettingName
     );
+
 VOID LoadGeoLiteDb(
     VOID
     );
+
 VOID FreeGeoLiteDb(
     VOID
     );
 
+_Success_(return)
 BOOLEAN LookupCountryCode(
     _In_ PH_IP_ADDRESS RemoteAddress,
     _Out_ PPH_STRING *CountryCode,
     _Out_ PPH_STRING *CountryName
     );
 
+_Success_(return)
 BOOLEAN LookupSockInAddr4CountryCode(
     _In_ IN_ADDR RemoteAddress,
     _Out_ PPH_STRING *CountryCode,
     _Out_ PPH_STRING *CountryName
     );
 
+_Success_(return)
 BOOLEAN LookupSockInAddr6CountryCode(
     _In_ IN6_ADDR RemoteAddress,
     _Out_ PPH_STRING *CountryCode,

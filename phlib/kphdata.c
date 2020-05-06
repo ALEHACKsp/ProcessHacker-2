@@ -24,8 +24,6 @@
 #include <ph.h>
 #include <kphuser.h>
 
-#ifdef _WIN64
-
 ULONG KphpGetKernelRevisionNumber(
     VOID
     )
@@ -43,12 +41,14 @@ ULONG KphpGetKernelRevisionNumber(
     PhDereferenceObject(kernelFileName);
 
     if (versionInfo && VerQueryValue(versionInfo, L"\\", &rootBlock, &rootBlockLength) && rootBlockLength != 0)
-        result = rootBlock->dwFileVersionLS & 0xffff;
+        result = LOWORD(rootBlock->dwFileVersionLS);
 
     PhFree(versionInfo);
 
     return result;
 }
+
+#ifdef _WIN64
 
 NTSTATUS KphInitializeDynamicPackage(
     _Out_ PKPH_DYN_PACKAGE Package
@@ -66,7 +66,7 @@ NTSTATUS KphInitializeDynamicPackage(
     Package->MajorVersion = (USHORT)majorVersion;
     Package->MinorVersion = (USHORT)minorVersion;
     Package->ServicePackMajor = (USHORT)servicePack;
-    Package->BuildNumber = -1;
+    Package->BuildNumber = USHRT_MAX;
 
     // Windows 7, Windows Server 2008 R2
     if (majorVersion == 6 && minorVersion == 1)
@@ -129,6 +129,8 @@ NTSTATUS KphInitializeDynamicPackage(
     // Windows 10, Windows Server 2016
     else if (majorVersion == 10 && minorVersion == 0)
     {
+        ULONG revisionNumber = KphpGetKernelRevisionNumber();
+
         switch (buildNumber)
         {
         case 10240:
@@ -159,11 +161,29 @@ NTSTATUS KphInitializeDynamicPackage(
             Package->BuildNumber = 17763;
             Package->ResultingNtVersion = PHNT_REDSTONE5;
             break;
+        case 18362:
+            Package->BuildNumber = 18362;
+            Package->ResultingNtVersion = PHNT_19H1;
+            break;
+        case 18363:
+            Package->BuildNumber = 18363;
+            Package->ResultingNtVersion = PHNT_19H2;
+            break;
+        case 19041:
+            Package->BuildNumber = 19041;
+            Package->ResultingNtVersion = PHNT_20H1;
+            break;
         default:
             return STATUS_NOT_SUPPORTED;
         }
 
-        Package->StructData.EgeGuid = 0x18;
+        if (buildNumber >= 19041)
+            Package->StructData.EgeGuid = 0x28;
+        else if (buildNumber >= 18363)
+            Package->StructData.EgeGuid = revisionNumber >= 693 ? 0x28 : 0x18;
+        else
+            Package->StructData.EgeGuid = 0x18;
+
         Package->StructData.EpObjectTable = 0x418;
         Package->StructData.EreGuidEntry = 0x20;
         Package->StructData.HtHandleContentionEvent = 0x30;
@@ -267,6 +287,8 @@ NTSTATUS KphInitializeDynamicPackage(
     // Windows 10
     else if (majorVersion == 10 && minorVersion == 0)
     {
+        ULONG revisionNumber = KphpGetKernelRevisionNumber();
+
         switch (buildNumber)
         {
         case 10240:
@@ -297,11 +319,29 @@ NTSTATUS KphInitializeDynamicPackage(
             Package->BuildNumber = 17763;
             Package->ResultingNtVersion = PHNT_REDSTONE5;
             break;
+        case 18362:
+            Package->BuildNumber = 18362;
+            Package->ResultingNtVersion = PHNT_19H1;
+            break;
+        case 18363:
+            Package->BuildNumber = 18363;
+            Package->ResultingNtVersion = PHNT_19H2;
+            break;
+        case 19041:
+            Package->BuildNumber = 19041;
+            Package->ResultingNtVersion = PHNT_20H1;
+            break;
         default:
             return STATUS_NOT_SUPPORTED;
         }
 
-        Package->StructData.EgeGuid = 0xc;
+        if (buildNumber >= 19041)
+            Package->StructData.EgeGuid = 0x14;
+        else if (buildNumber >= 18363)
+            Package->StructData.EgeGuid = revisionNumber >= 693 ? 0x14 : 0xC;
+        else
+            Package->StructData.EgeGuid = 0xC;
+
         Package->StructData.EpObjectTable = 0x154;
         Package->StructData.EreGuidEntry = 0x10;
         Package->StructData.OtName = 0x8;

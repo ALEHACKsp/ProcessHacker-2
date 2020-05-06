@@ -114,13 +114,13 @@ typedef struct _UPLOAD_CONTEXT
 {
     BOOLEAN VtApiUpload;
     BOOLEAN FileExists;
+    BOOLEAN Cancel;
     ULONG Service;
     ULONG ErrorCode;
     ULONG TotalFileLength;
     
     HWND DialogHandle;
     WNDPROC DialogWindowProc;
-    HANDLE UploadThreadHandle;
     HICON IconLargeHandle;
     HICON IconSmallHandle;
 
@@ -226,6 +226,7 @@ typedef enum _NETWORK_COLUMN_ID
     COLUMN_ID_VIUSTOTAL_SERVICE = 3
 } NETWORK_COLUMN_ID;
 
+_Success_(return >= 0)
 NTSTATUS HashFileAndResetPosition(
     _In_ HANDLE FileHandle,
     _In_ PLARGE_INTEGER FileSize,

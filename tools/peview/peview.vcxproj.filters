@@ -102,6 +102,18 @@
     <ClCompile Include="tlsprp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="previewprp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pedirprp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="richprp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="debugprp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\peview.h">
@@ -144,6 +156,9 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="resources\inactive_search.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="resources\application.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

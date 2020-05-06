@@ -42,9 +42,9 @@ static PVOID PhpQueryAppResolverInterface(
     if (PhBeginInitOnce(&initOnce))
     {
         if (WindowsVersion < WINDOWS_8)
-            CoCreateInstance(&CLSID_StartMenuCacheAndAppResolver_I, NULL, CLSCTX_INPROC_SERVER, &IID_IApplicationResolver61_I, &resolverInterface);
+            PhGetClassObject(L"appresolver.dll", &CLSID_StartMenuCacheAndAppResolver_I, &IID_IApplicationResolver61_I, &resolverInterface);
         else
-            CoCreateInstance(&CLSID_StartMenuCacheAndAppResolver_I, NULL, CLSCTX_INPROC_SERVER, &IID_IApplicationResolver62_I, &resolverInterface);
+            PhGetClassObject(L"appresolver.dll", &CLSID_StartMenuCacheAndAppResolver_I, &IID_IApplicationResolver62_I, &resolverInterface);
 
         PhEndInitOnce(&initOnce);
     }
@@ -62,9 +62,9 @@ static PVOID PhpQueryStartMenuCacheInterface(
     if (PhBeginInitOnce(&initOnce))
     {
         if (WindowsVersion < WINDOWS_8)
-            CoCreateInstance(&CLSID_StartMenuCacheAndAppResolver_I, NULL, CLSCTX_INPROC_SERVER, &IID_IStartMenuAppItems61_I, &startMenuInterface);
+            PhGetClassObject(L"appresolver.dll", &CLSID_StartMenuCacheAndAppResolver_I, &IID_IStartMenuAppItems61_I, &startMenuInterface);
         else
-            CoCreateInstance(&CLSID_StartMenuCacheAndAppResolver_I, NULL, CLSCTX_INPROC_SERVER, &IID_IStartMenuAppItems62_I, &startMenuInterface);
+            PhGetClassObject(L"appresolver.dll", &CLSID_StartMenuCacheAndAppResolver_I, &IID_IStartMenuAppItems62_I, &startMenuInterface);
 
         PhEndInitOnce(&initOnce);
     }
@@ -113,6 +113,7 @@ static BOOLEAN PhpKernelAppCoreInitialized(
     return kernelAppCoreInitialized;
 }
 
+_Success_(return)
 BOOLEAN PhAppResolverGetAppIdForProcess(
     _In_ HANDLE ProcessId,
     _Out_ PPH_STRING *ApplicationUserModelId
@@ -156,6 +157,7 @@ BOOLEAN PhAppResolverGetAppIdForProcess(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN PhAppResolverGetAppIdForWindow(
     _In_ HWND WindowHandle,
     _Out_ PPH_STRING *ApplicationUserModelId
@@ -209,10 +211,9 @@ HRESULT PhAppResolverActivateAppId(
     ULONG processId = 0;
     IApplicationActivationManager* applicationActivationManager;
 
-    status = CoCreateInstance(
+    status = PhGetClassObject(
+        L"twinui.appcore.dll",
         &CLSID_ApplicationActivationManager,
-        NULL,
-        CLSCTX_LOCAL_SERVER,
         &IID_IApplicationActivationManager,
         &applicationActivationManager
         );
@@ -240,6 +241,64 @@ HRESULT PhAppResolverActivateAppId(
     return status;
 }
 
+PPH_LIST PhAppResolverEnumeratePackageBackgroundTasks(
+    _In_ PPH_STRING PackageFullName
+    )
+{
+    HRESULT status;
+    PPH_LIST packageTasks = NULL;
+    IPackageDebugSettings* packageDebugSettings;
+
+    status = PhGetClassObject(
+        L"twinui.appcore.dll",
+        &CLSID_PackageDebugSettings,
+        &IID_IPackageDebugSettings,
+        &packageDebugSettings
+        );
+
+    if (SUCCEEDED(status))
+    {
+        ULONG taskCount = 0;
+        PGUID taskIds = NULL;
+        PWSTR* taskNames = NULL;
+
+        status = IPackageDebugSettings_EnumerateBackgroundTasks(
+            packageDebugSettings,
+            PhGetString(PackageFullName),
+            &taskCount,
+            &taskIds,
+            &taskNames
+            );
+
+        if (SUCCEEDED(status))
+        {
+            if (!packageTasks && taskCount > 0)
+                packageTasks = PhCreateList(taskCount);
+
+            for (ULONG i = 0; i < taskCount; i++)
+            {
+                PPH_PACKAGE_TASK_ENTRY entry;
+
+                if (!packageTasks)
+                    break;
+
+                entry = PhAllocateZero(sizeof(PH_PACKAGE_TASK_ENTRY));
+                entry->TaskGuid = taskIds[i];
+                entry->TaskName = PhCreateString(taskNames[i]);
+
+                PhAddItemList(packageTasks, entry);
+            }
+        }
+
+        IPackageDebugSettings_Release(packageDebugSettings);
+    }
+
+    if (packageTasks)
+        return packageTasks;
+    else
+        return NULL;
+}
+
 PPH_STRING PhGetAppContainerName(
     _In_ PSID AppContainerSid
     )
@@ -251,8 +310,6 @@ PPH_STRING PhGetAppContainerName(
     if (!PhpKernelAppCoreInitialized())
         return NULL;
 
-    // NOTE: The AppContainerLookupMoniker function is not able to lookup the appcontainer names created using the 
-    // CreateAppContainerProfile function from Win32 desktop applications (e.g. Google Chrome). 
     result = AppContainerLookupMoniker_I(
         AppContainerSid, 
         &packageMonikerName
@@ -357,6 +414,60 @@ PPH_STRING PhGetPackagePath(
     return packagePath;
 }
 
+PPH_STRING PhGetPackageAppDataPath(
+    _In_ HANDLE ProcessHandle
+    )
+{
+    static UNICODE_STRING attributeNameUs = RTL_CONSTANT_STRING(L"WIN://SYSAPPID");
+    static PH_STRINGREF appdataPackages = PH_STRINGREF_INIT(L"%APPDATALOCAL%\\Packages\\");
+    HANDLE tokenHandle;
+    PTOKEN_SECURITY_ATTRIBUTES_INFORMATION info;
+    PPH_STRING packageAppDataPath = NULL;
+
+    if (NT_SUCCESS(PhOpenProcessToken(
+        ProcessHandle,
+        TOKEN_QUERY,
+        &tokenHandle
+        )))
+    {
+        if (NT_SUCCESS(PhQueryTokenVariableSize(tokenHandle, TokenSecurityAttributes, &info)))
+        {
+            for (ULONG i = 0; i < info->AttributeCount; i++)
+            {
+                PTOKEN_SECURITY_ATTRIBUTE_V1 attribute = &info->Attribute.pAttributeV1[i];
+
+                if (attribute->ValueType == TOKEN_SECURITY_ATTRIBUTE_TYPE_STRING)
+                {
+                    if (RtlEqualUnicodeString(&attribute->Name, &attributeNameUs, FALSE))
+                    {
+                        PPH_STRING attributeValue;
+                        PPH_STRING attributePath;
+
+                        attributeValue = PhCreateStringFromUnicodeString(&attribute->Values.pString[2]);
+
+                        if (attributePath = PhExpandEnvironmentStrings(&appdataPackages))
+                        {
+                            packageAppDataPath = PhConcatStringRef2(&attributePath->sr, &attributeValue->sr);
+
+                            PhDereferenceObject(attributePath);
+                            PhDereferenceObject(attributeValue);
+                            break;
+                        }
+
+                        PhDereferenceObject(attributeValue);
+                    }
+                }
+            }
+
+            PhFree(info);
+        }
+
+        NtClose(tokenHandle);
+    }
+
+    return packageAppDataPath;
+}
+
 PPH_STRING PhGetProcessPackageFullName(
     _In_ HANDLE ProcessHandle
     )
@@ -420,6 +531,7 @@ BOOLEAN PhIsPackageCapabilitySid(
     return isPackageCapability;
 }
 
+_Success_(return)
 BOOLEAN PhGetAppWindowingModel(
     _In_ HANDLE ProcessTokenHandle,
     _Out_ AppPolicyWindowingModel *ProcessWindowingModelPolicy
@@ -440,10 +552,9 @@ PPH_LIST PhGetPackageAssetsFromResourceFile(
     PPH_LIST resourceList = NULL;
     ULONG resourceCount = 0;
 
-    if (FAILED(CoCreateInstance(
+    if (FAILED(PhGetClassObject(
+        L"mrmcorer.dll",
         &CLSID_MrtResourceManager_I,
-        NULL,
-        CLSCTX_INPROC_SERVER,
         &IID_IMrtResourceManager_I,
         &resourceManager
         )))

@@ -2,7 +2,7 @@
  * Process Hacker Network Tools  -
  *   IP Country support
  *
- * Copyright (C) 2016-2018 dmex
+ * Copyright (C) 2016-2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -27,33 +27,34 @@
 BOOLEAN GeoDbLoaded = FALSE;
 BOOLEAN GeoDbExpired = FALSE;
 HIMAGELIST GeoImageList = NULL;
-static MMDB_s GeoDb = { 0 };
+static MMDB_s GeoDbCountry = { 0 };
 
 PPH_STRING NetToolsGetGeoLiteDbPath(
-    VOID
+    _In_ PWSTR SettingName
     )
 {
     PPH_STRING databaseFile;
     PPH_STRING directory;
     PPH_STRING path;
 
-    if (!(databaseFile = PhGetExpandStringSetting(SETTING_NAME_DB_LOCATION)))
+    if (!(databaseFile = PhGetExpandStringSetting(SettingName)))
         return NULL;
 
     PhMoveReference(&databaseFile, PhGetBaseName(databaseFile));
+
     directory = PH_AUTO(PhGetApplicationDirectory());
     path = PH_AUTO(PhConcatStringRef2(&directory->sr, &databaseFile->sr));
 
-    if (RtlDoesFileExists_U(path->Buffer))
+    if (PhDoesFileExistsWin32(path->Buffer))
     {
         return PhReferenceObject(path);
     }
     else
     {
-        path = PhaGetStringSetting(SETTING_NAME_DB_LOCATION);
+        path = PhaGetStringSetting(SettingName);
         path = PH_AUTO(PhExpandEnvironmentStrings(&path->sr));
 
-        if (RtlDetermineDosPathNameType_U(path->Buffer) == RtlPathTypeRelative)
+        if (PhDetermineDosPathNameType(path->Buffer) == RtlPathTypeRelative)
         {
             directory = PH_AUTO(PhGetApplicationDirectory());
             path = PH_AUTO(PhConcatStringRef2(&directory->sr, &path->sr));
@@ -71,38 +72,34 @@ VOID LoadGeoLiteDb(
 {
     PPH_STRING dbpath;
 
-    dbpath = NetToolsGetGeoLiteDbPath();
-
-    if (PhIsNullOrEmptyString(dbpath))
-        return;
-
-    if (MMDB_open(PhGetString(dbpath), MMDB_MODE_MMAP, &GeoDb) == MMDB_SUCCESS)
+    if (dbpath = NetToolsGetGeoLiteDbPath(SETTING_NAME_DB_LOCATION))
     {
-        time_t systemTime;
-
-        // Query the current time
-        time(&systemTime);
-
-        // Check if the Geoip database is older than 6 months (182 days = approx. 6 months).
-        if ((systemTime - GeoDb.metadata.build_epoch) > (182 * 24 * 60 * 60))
+        if (MMDB_open(dbpath->Buffer, MMDB_MODE_MMAP, &GeoDbCountry) == MMDB_SUCCESS)
         {
-            GeoDbExpired = TRUE;
+            LARGE_INTEGER systemTime;
+            ULONG secondsSince1970;
+
+            // Query the current time
+            PhQuerySystemTime(&systemTime);
+            // Convert to unix epoch time
+            RtlTimeToSecondsSince1970(&systemTime, &secondsSince1970);
+
+            // Check if the Geoip database is older than 6 months (182 days = approx. 6 months).
+            if ((secondsSince1970 - GeoDbCountry.metadata.build_epoch) > (182 * 24 * 60 * 60))
+            {
+                GeoDbExpired = TRUE;
+            }
+
+            GeoDbLoaded = TRUE;
         }
 
-        if (GeoDb.metadata.ip_version == 6)
+        if (GeoDbLoaded)
         {
-            // Database includes ipv6 entires.
+            GeoImageList = ImageList_Create(16, 11, ILC_COLOR32, 20, 20);
         }
 
-        GeoDbLoaded = TRUE;
+        PhDereferenceObject(dbpath);
     }
-
-    if (GeoDbLoaded)
-    {
-        GeoImageList = ImageList_Create(16, 11, ILC_COLOR32, 20, 20);
-    }
-
-    PhDereferenceObject(dbpath);
 }
 
 VOID FreeGeoLiteDb(
@@ -117,10 +114,11 @@ VOID FreeGeoLiteDb(
 
     if (GeoDbLoaded)
     {
-        MMDB_close(&GeoDb);
+        MMDB_close(&GeoDbCountry);
     }
 }
 
+_Success_(return)
 BOOLEAN GeoDbGetCityData(
     _In_ MMDB_entry_s* GeoDbEntry,
     _Out_ DOUBLE *CityLatitude,
@@ -157,6 +155,7 @@ BOOLEAN GeoDbGetCityData(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN GeoDbGetCountryData(
     _In_ MMDB_entry_s* GeoDbEntry,
     _Out_ PPH_STRING *CountryCode,
@@ -197,6 +196,7 @@ BOOLEAN GeoDbGetCountryData(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN GeoDbGetContinentData(
     _In_ MMDB_entry_s* GeoDbEntry,
     _Out_ PPH_STRING *ContinentCode,
@@ -237,6 +237,7 @@ BOOLEAN GeoDbGetContinentData(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN LookupCountryCode(
     _In_ PH_IP_ADDRESS RemoteAddress,
     _Out_ PPH_STRING *CountryCode,
@@ -253,14 +254,14 @@ BOOLEAN LookupCountryCode(
     {
         SOCKADDR_IN ipv4SockAddr;
 
-        if (IN4_IS_ADDR_UNSPECIFIED(&RemoteAddress.InAddr))
+        if (
+            IN4_IS_ADDR_UNSPECIFIED(&RemoteAddress.InAddr) ||
+            IN4_IS_ADDR_LOOPBACK(&RemoteAddress.InAddr) ||
+            IN4_IS_ADDR_RFC1918(&RemoteAddress.InAddr)
+            )
+        {
             return FALSE;
-
-        if (IN4_IS_ADDR_LOOPBACK(&RemoteAddress.InAddr))
-            return FALSE;
-
-        if (IN4_IS_ADDR_RFC1918(&RemoteAddress.InAddr))
-            return FALSE;
+        }
 
         memset(&ipv4SockAddr, 0, sizeof(SOCKADDR_IN));
         memset(&mmdb_result, 0, sizeof(MMDB_lookup_result_s));
@@ -269,7 +270,7 @@ BOOLEAN LookupCountryCode(
         ipv4SockAddr.sin_addr = RemoteAddress.InAddr;
 
         mmdb_result = MMDB_lookup_sockaddr(
-            &GeoDb,
+            &GeoDbCountry,
             (struct sockaddr*)&ipv4SockAddr,
             &mmdb_error
             );
@@ -278,11 +279,14 @@ BOOLEAN LookupCountryCode(
     {
         SOCKADDR_IN6 ipv6SockAddr;
 
-        if (IN6_IS_ADDR_UNSPECIFIED(&RemoteAddress.In6Addr))
+        if (
+            IN6_IS_ADDR_UNSPECIFIED(&RemoteAddress.In6Addr) ||
+            IN6_IS_ADDR_LOOPBACK(&RemoteAddress.In6Addr) ||
+            IN6_IS_ADDR_LINKLOCAL(&RemoteAddress.In6Addr)
+            )
+        {
             return FALSE;
-
-        if (IN6_IS_ADDR_LOOPBACK(&RemoteAddress.In6Addr))
-            return FALSE;
+        }
 
         memset(&ipv6SockAddr, 0, sizeof(SOCKADDR_IN6));
         memset(&mmdb_result, 0, sizeof(MMDB_lookup_result_s));
@@ -291,7 +295,7 @@ BOOLEAN LookupCountryCode(
         ipv6SockAddr.sin6_addr = RemoteAddress.In6Addr;
 
         mmdb_result = MMDB_lookup_sockaddr(
-            &GeoDb,
+            &GeoDbCountry,
             (struct sockaddr*)&ipv6SockAddr,
             &mmdb_error
             );
@@ -301,9 +305,6 @@ BOOLEAN LookupCountryCode(
     {
         if (GeoDbGetCountryData(&mmdb_result.entry, CountryCode, CountryName))
             return TRUE;
-
-        // HACK
-        // We can sometimes get the continent even when the address doesn't have a country.
         if (GeoDbGetContinentData(&mmdb_result.entry, CountryCode, CountryName))
             return TRUE;
     }
@@ -311,6 +312,7 @@ BOOLEAN LookupCountryCode(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN LookupSockInAddr4CountryCode(
     _In_ IN_ADDR RemoteAddress,
     _Out_ PPH_STRING *CountryCode,
@@ -324,10 +326,8 @@ BOOLEAN LookupSockInAddr4CountryCode(
     if (!GeoDbLoaded)
         return FALSE;
 
-    if (IN4_IS_ADDR_UNSPECIFIED(&RemoteAddress))
-        return FALSE;
-
-    if (IN4_IS_ADDR_LOOPBACK(&RemoteAddress))
+    if (IN4_IS_ADDR_UNSPECIFIED(&RemoteAddress) ||
+        IN4_IS_ADDR_LOOPBACK(&RemoteAddress))
         return FALSE;
 
     memset(&ipv4SockAddr, 0, sizeof(SOCKADDR_IN));
@@ -337,7 +337,7 @@ BOOLEAN LookupSockInAddr4CountryCode(
     ipv4SockAddr.sin_addr = RemoteAddress;
 
     mmdb_result = MMDB_lookup_sockaddr(
-        &GeoDb,
+        &GeoDbCountry,
         (PSOCKADDR)&ipv4SockAddr,
         &mmdb_error
         );
@@ -346,9 +346,6 @@ BOOLEAN LookupSockInAddr4CountryCode(
     {
         if (GeoDbGetCountryData(&mmdb_result.entry, CountryCode, CountryName))
             return TRUE;
-
-        // HACK
-        // We can sometimes get the continent even when the address doesn't have a country.
         if (GeoDbGetContinentData(&mmdb_result.entry, CountryCode, CountryName))
             return TRUE;
     }
@@ -356,6 +353,7 @@ BOOLEAN LookupSockInAddr4CountryCode(
     return FALSE;
 }
 
+_Success_(return)
 BOOLEAN LookupSockInAddr6CountryCode(
     _In_ IN6_ADDR RemoteAddress,
     _Out_ PPH_STRING *CountryCode,
@@ -369,10 +367,8 @@ BOOLEAN LookupSockInAddr6CountryCode(
     if (!GeoDbLoaded)
         return FALSE;
 
-    if (IN6_IS_ADDR_UNSPECIFIED(&RemoteAddress))
-        return FALSE;
-
-    if (IN6_IS_ADDR_LOOPBACK(&RemoteAddress))
+    if (IN6_IS_ADDR_UNSPECIFIED(&RemoteAddress) ||
+        IN6_IS_ADDR_LOOPBACK(&RemoteAddress))
         return FALSE;
 
     memset(&ipv6SockAddr, 0, sizeof(SOCKADDR_IN6));
@@ -382,7 +378,7 @@ BOOLEAN LookupSockInAddr6CountryCode(
     ipv6SockAddr.sin6_addr = RemoteAddress;
 
     mmdb_result = MMDB_lookup_sockaddr(
-        &GeoDb,
+        &GeoDbCountry,
         (PSOCKADDR)&ipv6SockAddr,
         &mmdb_error
         );
@@ -391,9 +387,6 @@ BOOLEAN LookupSockInAddr6CountryCode(
     {
         if (GeoDbGetCountryData(&mmdb_result.entry, CountryCode, CountryName))
             return TRUE;
-
-        // HACK
-        // We can sometimes get the continent even when the address doesn't have a country.
         if (GeoDbGetContinentData(&mmdb_result.entry, CountryCode, CountryName))
             return TRUE;
     }
@@ -496,22 +489,20 @@ INT LookupCountryIcon(
             {
                 HBITMAP countryBitmap;
 
-                countryBitmap = PhLoadPngImageFromResource(
-                    PluginInstance->DllBase, 
+                if (countryBitmap = PhLoadPngImageFromResource(
+                    PluginInstance->DllBase,
                     16,
-                    11, 
-                    MAKEINTRESOURCE(CountryResourceTable[i].ResourceID), 
+                    11,
+                    MAKEINTRESOURCE(CountryResourceTable[i].ResourceID),
                     TRUE
-                    );
-
-                if (countryBitmap)
+                    ))
                 {
                     CountryResourceTable[i].IconIndex = ImageList_Add(
                         GeoImageList, 
                         countryBitmap, 
                         NULL
                         );
-                    DeleteObject(countryBitmap);
+                    DeleteBitmap(countryBitmap);
                 }
             }
 

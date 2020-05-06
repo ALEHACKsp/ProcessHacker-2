@@ -70,18 +70,18 @@ VOID PhInitializeTreeNewColumnMenuEx(
             resetSortMenuItem = PhCreateEMenuItem(0, PH_TN_COLUMN_MENU_RESET_SORT_ID, L"Reset sort", NULL, NULL);
     }
 
-    PhInsertEMenuItem(Data->Menu, sizeColumnToFitMenuItem, -1);
-    PhInsertEMenuItem(Data->Menu, sizeAllColumnsToFitMenuItem, -1);
+    PhInsertEMenuItem(Data->Menu, sizeColumnToFitMenuItem, ULONG_MAX);
+    PhInsertEMenuItem(Data->Menu, sizeAllColumnsToFitMenuItem, ULONG_MAX);
 
     if (!(Flags & PH_TN_COLUMN_MENU_NO_VISIBILITY))
     {
-        PhInsertEMenuItem(Data->Menu, hideColumnMenuItem, -1);
+        PhInsertEMenuItem(Data->Menu, hideColumnMenuItem, ULONG_MAX);
 
         if (resetSortMenuItem)
-            PhInsertEMenuItem(Data->Menu, resetSortMenuItem, -1);
+            PhInsertEMenuItem(Data->Menu, resetSortMenuItem, ULONG_MAX);
 
-        PhInsertEMenuItem(Data->Menu, PhCreateEMenuSeparator(), -1);
-        PhInsertEMenuItem(Data->Menu, chooseColumnsMenuItem, -1);
+        PhInsertEMenuItem(Data->Menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(Data->Menu, chooseColumnsMenuItem, ULONG_MAX);
 
         if (TreeNew_GetFixedColumn(Data->TreeNewHandle))
             minimumNumberOfColumns = 2; // don't allow user to remove all normal columns (the fixed column can never be removed)
@@ -99,7 +99,7 @@ VOID PhInitializeTreeNewColumnMenuEx(
     else
     {
         if (resetSortMenuItem)
-            PhInsertEMenuItem(Data->Menu, resetSortMenuItem, -1);
+            PhInsertEMenuItem(Data->Menu, resetSortMenuItem, ULONG_MAX);
     }
 
     if (!Data->MouseEvent || !Data->MouseEvent->Column)
@@ -300,7 +300,7 @@ VOID PhRemoveTreeNewFilter(
 
     index = PhFindItemList(Support->FilterList, Entry);
 
-    if (index != -1)
+    if (index != ULONG_MAX)
     {
         PhRemoveItemList(Support->FilterList, index);
         PhFree(Entry);
@@ -581,7 +581,7 @@ VOID PvRemoveSymbolNode(
 
     PhRemoveEntryHashtable(Context->NodeHashtable, &Node);
 
-    if ((index = PhFindItemList(Context->NodeList, Node)) != -1)
+    if ((index = PhFindItemList(Context->NodeList, Node)) != ULONG_MAX)
         PhRemoveItemList(Context->NodeList, index);
 
     PvDestroySymbolNode(Node);
@@ -1058,7 +1058,7 @@ VOID CALLBACK PvSymbolTreeUpdateCallback(
     TreeNew_NodesStructured(Context->TreeNewHandle);
     TreeNew_SetRedraw(Context->TreeNewHandle, TRUE);
 
-    RtlUpdateTimer(Context->TimerQueueHandle, Context->UpdateTimerHandle, 1000, INFINITE);
+    RtlUpdateTimer(PhGetGlobalTimerQueue(), Context->UpdateTimerHandle, 1000, INFINITE);
 }
 
 INT_PTR CALLBACK PvpSymbolsDlgProc(
@@ -1105,18 +1105,15 @@ INT_PTR CALLBACK PvpSymbolsDlgProc(
 
             PhCreateThread2(PeDumpFileSymbols, context);
 
-            if (NT_SUCCESS(RtlCreateTimerQueue(&context->TimerQueueHandle)))
-            {
-                RtlCreateTimer(
-                    context->TimerQueueHandle,
-                    &context->UpdateTimerHandle,
-                    PvSymbolTreeUpdateCallback,
-                    context,
-                    0,
-                    1000,
-                    0
-                    );
-            }
+            RtlCreateTimer(
+                PhGetGlobalTimerQueue(),
+                &context->UpdateTimerHandle,
+                PvSymbolTreeUpdateCallback,
+                context,
+                0,
+                1000,
+                0
+                );
 
             EnableThemeDialogTexture(hwndDlg, ETDT_ENABLETAB);
         }
@@ -1125,14 +1122,8 @@ INT_PTR CALLBACK PvpSymbolsDlgProc(
         {
             if (context->UpdateTimerHandle)
             {
-                RtlDeleteTimer(context->TimerQueueHandle, context->UpdateTimerHandle, NULL);
+                RtlDeleteTimer(PhGetGlobalTimerQueue(), context->UpdateTimerHandle, NULL);
                 context->UpdateTimerHandle = NULL;
-            }
-
-            if (context->TimerQueueHandle)
-            {
-                RtlDeleteTimerQueue(context->TimerQueueHandle);
-                context->TimerQueueHandle = NULL;
             }
 
             PvDeleteSymbolTree(context);
@@ -1193,14 +1184,8 @@ INT_PTR CALLBACK PvpSymbolsDlgProc(
 
             //if (context->UpdateTimerHandle)
             //{
-            //    RtlDeleteTimer(context->TimerQueueHandle, context->UpdateTimerHandle, NULL);
+            //    RtlDeleteTimer(PhGetGlobalTimerQueue(), context->UpdateTimerHandle, NULL);
             //    context->UpdateTimerHandle = NULL;
-            //}
-
-            //if (context->TimerQueueHandle)
-            //{
-            //    RtlDeleteTimerQueue(context->TimerQueueHandle);
-            //    context->TimerQueueHandle = NULL;
             //}
         }
         break;
@@ -1217,7 +1202,7 @@ INT_PTR CALLBACK PvpSymbolsDlgProc(
             if (numberOfSymbolNodes != 0)
             {
                 menu = PhCreateEMenu();
-                PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SYMBOL_COPY, L"Copy", NULL, NULL), -1);
+                PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_SYMBOL_COPY, L"Copy", NULL, NULL), ULONG_MAX);
                 PhInsertCopyCellEMenuItem(menu, ID_SYMBOL_COPY, context->TreeNewHandle, contextMenuEvent->Column);
 
                 selectedItem = PhShowEMenu(
@@ -1229,7 +1214,7 @@ INT_PTR CALLBACK PvpSymbolsDlgProc(
                     contextMenuEvent->Location.y
                     );
 
-                if (selectedItem && selectedItem->Id != -1)
+                if (selectedItem && selectedItem->Id != ULONG_MAX)
                 {
                     BOOLEAN handled = FALSE;
 
@@ -1260,7 +1245,7 @@ VOID PvPdbProperties(
 {
     PPV_PROPCONTEXT propContext;
 
-    if (!RtlDoesFileExists_U(PvFileName->Buffer))
+    if (!PhDoesFileExistsWin32(PvFileName->Buffer))
     {
         PhShowStatus(NULL, L"Unable to load the pdb file", STATUS_FILE_NOT_AVAILABLE, 0);
         return;

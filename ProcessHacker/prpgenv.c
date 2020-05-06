@@ -26,6 +26,7 @@
 #include <emenu.h>
 #include <settings.h>
 
+#include <apiimport.h>
 #include <phsettings.h>
 #include <procprp.h>
 #include <procprpp.h>
@@ -182,17 +183,17 @@ VOID PhpRefreshEnvironmentList(
     userRootNode = PhpAddEnvironmentNode(Context, NULL, PROCESS_ENVIRONMENT_TREENODE_TYPE_GROUP, PhaCreateString(L"User"), NULL);
     systemRootNode = PhpAddEnvironmentNode(Context, NULL, PROCESS_ENVIRONMENT_TREENODE_TYPE_GROUP, PhaCreateString(L"System"), NULL);
 
-    if (DestroyEnvironmentBlock)
+    if (DestroyEnvironmentBlock_Import())
     {
         if (Context->SystemDefaultEnvironment)
         {
-            DestroyEnvironmentBlock(Context->SystemDefaultEnvironment);
+            DestroyEnvironmentBlock_Import()(Context->SystemDefaultEnvironment);
             Context->SystemDefaultEnvironment = NULL;
         }
 
         if (Context->UserDefaultEnvironment)
         {
-            DestroyEnvironmentBlock(Context->UserDefaultEnvironment);
+            DestroyEnvironmentBlock_Import()(Context->UserDefaultEnvironment);
             Context->UserDefaultEnvironment = NULL;
         }
     }
@@ -206,9 +207,9 @@ VOID PhpRefreshEnvironmentList(
         HANDLE tokenHandle;
         ULONG flags = 0;
 
-        if (CreateEnvironmentBlock)
+        if (CreateEnvironmentBlock_Import())
         {
-            CreateEnvironmentBlock(&Context->SystemDefaultEnvironment, NULL, FALSE);
+            CreateEnvironmentBlock_Import()(&Context->SystemDefaultEnvironment, NULL, FALSE);
 
             if (NT_SUCCESS(PhOpenProcessToken(
                 processHandle,
@@ -216,7 +217,7 @@ VOID PhpRefreshEnvironmentList(
                 &tokenHandle
                 )))
             {
-                CreateEnvironmentBlock(&Context->UserDefaultEnvironment, tokenHandle, FALSE);
+                CreateEnvironmentBlock_Import()(&Context->UserDefaultEnvironment, tokenHandle, FALSE);
                 NtClose(tokenHandle);
             }
         }
@@ -238,11 +239,6 @@ VOID PhpRefreshEnvironmentList(
             while (PhEnumProcessEnvironmentVariables(environment, environmentLength, &enumerationKey, &variable))
             {
                 PH_ENVIRONMENT_ITEM item;
-
-                // Remove the most confusing item. Some say it's just a weird per-drive current directory 
-                // with a colon used as a drive letter for some reason. It should not be here. (diversenok)
-                //if (PhEqualStringRef2(&variable.Name, L"=::", FALSE) && PhEqualStringRef2(&variable.Value, L"::\\", FALSE))
-                //    continue;
 
                 item.Name = PhCreateString2(&variable.Name);
                 item.Value = PhCreateString2(&variable.Value);
@@ -688,7 +684,7 @@ static BOOLEAN PhpWordMatchEnvironmentStringRef(
 
     while (remainingPart.Length)
     {
-        PhSplitStringRefAtChar(&remainingPart, '|', &part, &remainingPart);
+        PhSplitStringRefAtChar(&remainingPart, L'|', &part, &remainingPart);
 
         if (part.Length)
         {
@@ -984,16 +980,21 @@ BOOLEAN NTAPI PhpEnvironmentTreeNewCallback(
     _In_opt_ PVOID Context
 )
 {
-    PPH_ENVIRONMENT_CONTEXT context;
+    PPH_ENVIRONMENT_CONTEXT context = Context;
     PPHP_PROCESS_ENVIRONMENT_TREENODE node;
 
-    context = Context;
+    if (!context)
+        return FALSE;
 
     switch (Message)
     {
     case TreeNewGetChildren:
         {
             PPH_TREENEW_GET_CHILDREN getChildren = Parameter1;
+
+            if (!getChildren)
+                break;
+
             node = (PPHP_PROCESS_ENVIRONMENT_TREENODE)getChildren->Node;
 
             if (context->TreeNewSortOrder == NoSortOrder)
@@ -1039,6 +1040,10 @@ BOOLEAN NTAPI PhpEnvironmentTreeNewCallback(
     case TreeNewIsLeaf:
         {
             PPH_TREENEW_IS_LEAF isLeaf = Parameter1;
+
+            if (!isLeaf)
+                break;
+
             node = (PPHP_PROCESS_ENVIRONMENT_TREENODE)isLeaf->Node;
 
             if (context->TreeNewSortOrder == NoSortOrder)
@@ -1050,6 +1055,10 @@ BOOLEAN NTAPI PhpEnvironmentTreeNewCallback(
     case TreeNewGetCellText:
         {
             PPH_TREENEW_GET_CELL_TEXT getCellText = (PPH_TREENEW_GET_CELL_TEXT)Parameter1;
+
+            if (!getCellText)
+                break;
+
             node = (PPHP_PROCESS_ENVIRONMENT_TREENODE)getCellText->Node;
 
             switch (getCellText->Id)
@@ -1070,6 +1079,10 @@ BOOLEAN NTAPI PhpEnvironmentTreeNewCallback(
     case TreeNewGetNodeColor:
         {
             PPH_TREENEW_GET_NODE_COLOR getNodeColor = (PPH_TREENEW_GET_NODE_COLOR)Parameter1;
+
+            if (!getNodeColor)
+                break;
+
             node = (PPHP_PROCESS_ENVIRONMENT_TREENODE)getNodeColor->Node;
 
             if (node->HasChildren)
@@ -1105,6 +1118,9 @@ BOOLEAN NTAPI PhpEnvironmentTreeNewCallback(
     case TreeNewContextMenu:
         {
             PPH_TREENEW_CONTEXT_MENU contextMenuEvent = Parameter1;
+
+            if (!contextMenuEvent)
+                break;
 
             PhpShowEnvironmentNodeContextMenu(context, contextMenuEvent);
         }
@@ -1252,6 +1268,8 @@ BOOLEAN PhpProcessEnvironmentTreeFilterCallback(
     PPH_ENVIRONMENT_CONTEXT context = Context;
     PPHP_PROCESS_ENVIRONMENT_TREENODE environmentNode = (PPHP_PROCESS_ENVIRONMENT_TREENODE)Node;
 
+    if (!context)
+        return FALSE;
     if (!environmentNode->Parent && environmentNode->Children && environmentNode->Children->Count == 0)
         return FALSE;
     if (context->TreeNewSortOrder != NoSortOrder && environmentNode->HasChildren)
@@ -1343,12 +1361,12 @@ INT_PTR CALLBACK PhpProcessEnvironmentDlgProc(
             PhDeleteArray(&context->Items);
             PhClearReference(&context->StatusMessage);
 
-            if (DestroyEnvironmentBlock)
+            if (DestroyEnvironmentBlock_Import())
             {
                 if (context->SystemDefaultEnvironment)
-                    DestroyEnvironmentBlock(context->SystemDefaultEnvironment);
+                    DestroyEnvironmentBlock_Import()(context->SystemDefaultEnvironment);
                 if (context->UserDefaultEnvironment)
-                    DestroyEnvironmentBlock(context->UserDefaultEnvironment);
+                    DestroyEnvironmentBlock_Import()(context->UserDefaultEnvironment);
             }
 
             PhFree(context);
@@ -1520,6 +1538,18 @@ INT_PTR CALLBACK PhpProcessEnvironmentDlgProc(
             case PSN_QUERYINITIALFOCUS:
                 SetWindowLongPtr(hwndDlg, DWLP_MSGRESULT, (LPARAM)GetDlgItem(hwndDlg, IDC_REFRESH));
                 return TRUE;
+            }
+        }
+        break;
+    case WM_KEYDOWN:
+        {
+            if (LOWORD(wParam) == 'K')
+            {
+                if (GetKeyState(VK_CONTROL) < 0)
+                {
+                    SetFocus(context->SearchWindowHandle);
+                    return TRUE;
+                }
             }
         }
         break;

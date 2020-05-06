@@ -3,7 +3,7 @@
  *   Process properties: Modules page
  *
  * Copyright (C) 2009-2016 wj32
- * Copyright (C) 2017 dmex
+ * Copyright (C) 2017-2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -47,6 +47,11 @@ static VOID NTAPI ModuleAddedHandler(
 {
     PPH_MODULES_CONTEXT modulesContext = (PPH_MODULES_CONTEXT)Context;
 
+    if (!modulesContext)
+        return;
+    if (!Parameter)
+        return;
+
     // Parameter contains a pointer to the added module item.
     PhReferenceObject(Parameter);
     PhPushProviderEventQueue(&modulesContext->EventQueue, ProviderAddedEvent, Parameter, PhGetRunIdProvider(&modulesContext->ProviderRegistration));
@@ -59,6 +64,9 @@ static VOID NTAPI ModuleModifiedHandler(
 {
     PPH_MODULES_CONTEXT modulesContext = (PPH_MODULES_CONTEXT)Context;
 
+    if (!modulesContext)
+        return;
+
     PhPushProviderEventQueue(&modulesContext->EventQueue, ProviderModifiedEvent, Parameter, PhGetRunIdProvider(&modulesContext->ProviderRegistration));
 }
 
@@ -68,6 +76,9 @@ static VOID NTAPI ModuleRemovedHandler(
     )
 {
     PPH_MODULES_CONTEXT modulesContext = (PPH_MODULES_CONTEXT)Context;
+
+    if (!modulesContext)
+        return;
 
     PhPushProviderEventQueue(&modulesContext->EventQueue, ProviderRemovedEvent, Parameter, PhGetRunIdProvider(&modulesContext->ProviderRegistration));
 }
@@ -79,6 +90,9 @@ static VOID NTAPI ModulesUpdatedHandler(
 {
     PPH_MODULES_CONTEXT modulesContext = (PPH_MODULES_CONTEXT)Context;
 
+    if (!modulesContext)
+        return;
+
     PostMessage(modulesContext->WindowHandle, WM_PH_MODULES_UPDATED, PhGetRunIdProvider(&modulesContext->ProviderRegistration), 0);
 }
 
@@ -89,17 +103,6 @@ VOID PhpInitializeModuleMenu(
     _In_ ULONG NumberOfModules
     )
 {
-    PPH_EMENU_ITEM item;
-    PPH_STRING inspectExecutables;
-
-    inspectExecutables = PhaGetStringSetting(L"ProgramInspectExecutables");
-
-    if (inspectExecutables->Length == 0)
-    {
-        if (item = PhFindEMenuItem(Menu, 0, NULL, ID_MODULE_INSPECT))
-            PhDestroyEMenuItem(item);
-    }
-
     if (NumberOfModules == 0)
     {
         PhSetFlagsAllEMenuItems(Menu, PH_EMENU_DISABLED, PH_EMENU_DISABLED);
@@ -134,9 +137,13 @@ VOID PhShowModuleContextMenu(
         PH_PLUGIN_MENU_INFORMATION menuInfo;
 
         menu = PhCreateEMenu();
-        PhLoadResourceEMenuItem(menu, PhInstanceHandle, MAKEINTRESOURCE(IDR_MODULE), 0);
-        PhSetFlagsEMenuItem(menu, ID_MODULE_INSPECT, PH_EMENU_DEFAULT, PH_EMENU_DEFAULT);
-
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MODULE_UNLOAD, L"&Unload\bDel", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MODULE_OPENFILELOCATION, L"Open &file location\bCtrl+Enter", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MODULE_PROPERTIES, L"P&roperties", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_MODULE_COPY, L"&Copy\bCtrl+C", NULL, NULL), ULONG_MAX);
+        PhSetFlagsEMenuItem(menu, ID_MODULE_PROPERTIES, PH_EMENU_DEFAULT, PH_EMENU_DEFAULT);
         PhpInitializeModuleMenu(menu, ProcessItem->ProcessId, modules, numberOfModules);
         PhInsertCopyCellEMenuItem(menu, ID_MODULE_COPY, Context->ListContext.TreeNewHandle, ContextMenu->Column);
 
@@ -190,7 +197,7 @@ static BOOLEAN PhpWordMatchHandleStringRef(
 
     while (remainingPart.Length)
     {
-        PhSplitStringRefAtChar(&remainingPart, '|', &part, &remainingPart);
+        PhSplitStringRefAtChar(&remainingPart, L'|', &part, &remainingPart);
 
         if (part.Length)
         {
@@ -253,6 +260,16 @@ BOOLEAN PhpModulesTreeFilterCallback(
 
     if (Context->ListContext.HideSignedModules && moduleItem->VerifyResult == VrTrusted)
         return FALSE;
+
+    if (
+        PhEnableProcessQueryStage2 &&
+        Context->ListContext.HideSystemModules &&
+        moduleItem->VerifyResult == VrTrusted &&
+        PhEqualStringRef2(&moduleItem->VerifySignerName->sr, L"Microsoft Windows", TRUE)
+        )
+    {
+        return FALSE;
+    }
 
     if (PhIsNullOrEmptyString(Context->SearchboxText))
         return TRUE;
@@ -405,14 +422,10 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
     PPH_PROCESS_PROPPAGECONTEXT propPageContext;
     PPH_PROCESS_ITEM processItem;
     PPH_MODULES_CONTEXT modulesContext;
-    HWND tnHandle;
 
     if (PhPropPageDlgProcHeader(hwndDlg, uMsg, lParam, &propSheetPage, &propPageContext, &processItem))
     {
         modulesContext = (PPH_MODULES_CONTEXT)propPageContext->Context;
-
-        if (modulesContext)
-            tnHandle = modulesContext->ListContext.TreeNewHandle;
     }
     else
     {
@@ -425,6 +438,10 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
         {
             modulesContext = propPageContext->Context = PhAllocate(PhEmGetObjectSize(EmModulesContextType, sizeof(PH_MODULES_CONTEXT)));
             memset(modulesContext, 0, sizeof(PH_MODULES_CONTEXT));
+
+            modulesContext->WindowHandle = hwndDlg;
+            modulesContext->TreeNewHandle = GetDlgItem(hwndDlg, IDC_LIST);
+            modulesContext->SearchboxHandle = GetDlgItem(hwndDlg, IDC_SEARCH);
 
             modulesContext->Provider = PhCreateModuleProvider(
                 processItem->ProcessId
@@ -459,20 +476,18 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
                 modulesContext,
                 &modulesContext->UpdatedEventRegistration
                 );
-            modulesContext->WindowHandle = hwndDlg;
-
-            modulesContext->SearchboxHandle = GetDlgItem(hwndDlg, IDC_SEARCH);
-            PhCreateSearchControl(hwndDlg, modulesContext->SearchboxHandle, L"Search Modules (Ctrl+K)");
 
             // Initialize the list.
-            tnHandle = GetDlgItem(hwndDlg, IDC_LIST);
-            PhInitializeModuleList(hwndDlg, tnHandle, &modulesContext->ListContext);
-            TreeNew_SetEmptyText(tnHandle, &PhpLoadingText, 0);
+            PhInitializeModuleList(hwndDlg, modulesContext->TreeNewHandle, &modulesContext->ListContext);
+            TreeNew_SetEmptyText(modulesContext->TreeNewHandle, &PhpLoadingText, 0);
             PhInitializeProviderEventQueue(&modulesContext->EventQueue, 100);
             modulesContext->LastRunStatus = -1;
             modulesContext->ErrorMessage = NULL;
             modulesContext->SearchboxText = PhReferenceEmptyString();
             modulesContext->FilterEntry = PhAddTreeNewFilter(&modulesContext->ListContext.TreeFilterSupport, PhpModulesTreeFilterCallback, modulesContext);
+
+            // Initialize the search box. (dmex)
+            PhCreateSearchControl(hwndDlg, modulesContext->SearchboxHandle, L"Search Modules (Ctrl+K)");
 
             PhEmCallObjectOperation(EmModulesContextType, modulesContext, EmObjectCreate);
 
@@ -480,7 +495,7 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
             {
                 PH_PLUGIN_TREENEW_INFORMATION treeNewInfo;
 
-                treeNewInfo.TreeNewHandle = tnHandle;
+                treeNewInfo.TreeNewHandle = modulesContext->TreeNewHandle;
                 treeNewInfo.CmData = &modulesContext->ListContext.Cm;
                 treeNewInfo.SystemContext = modulesContext;
                 PhInvokeCallback(PhGetGeneralCallback(GeneralCallbackModuleTreeNewInitializing), &treeNewInfo);
@@ -525,7 +540,7 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
             {
                 PH_PLUGIN_TREENEW_INFORMATION treeNewInfo;
 
-                treeNewInfo.TreeNewHandle = tnHandle;
+                treeNewInfo.TreeNewHandle = modulesContext->TreeNewHandle;
                 treeNewInfo.CmData = &modulesContext->ListContext.Cm;
                 PhInvokeCallback(PhGetGeneralCallback(GeneralCallbackModuleTreeNewUninitializing), &treeNewInfo);
             }
@@ -544,7 +559,7 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
             if (dialogItem = PhBeginPropPageLayout(hwndDlg, propPageContext))
             {
                 PhAddPropPageLayoutItem(hwndDlg, modulesContext->SearchboxHandle, dialogItem, PH_ANCHOR_TOP | PH_ANCHOR_RIGHT);
-                PhAddPropPageLayoutItem(hwndDlg, modulesContext->ListContext.TreeNewHandle, dialogItem, PH_ANCHOR_ALL);
+                PhAddPropPageLayoutItem(hwndDlg, modulesContext->TreeNewHandle, dialogItem, PH_ANCHOR_ALL);
                 PhEndPropPageLayout(hwndDlg, propPageContext);
             }
         }
@@ -598,32 +613,6 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
                     }
                 }
                 break;
-            case ID_MODULE_INSPECT:
-                {
-                    PPH_MODULE_ITEM moduleItem = PhGetSelectedModuleItem(&modulesContext->ListContext);
-
-                    if (moduleItem)
-                    {
-                        PhShellExecuteUserString(
-                            hwndDlg,
-                            L"ProgramInspectExecutables",
-                            moduleItem->FileName->Buffer,
-                            FALSE,
-                            L"Make sure the PE Viewer executable file is present."
-                            );
-                    }
-                }
-                break;
-            case ID_MODULE_SEARCHONLINE:
-                {
-                    PPH_MODULE_ITEM moduleItem = PhGetSelectedModuleItem(&modulesContext->ListContext);
-
-                    if (moduleItem)
-                    {
-                        PhSearchOnlineString(hwndDlg, moduleItem->Name->Buffer);
-                    }
-                }
-                break;
             case ID_MODULE_OPENFILELOCATION:
                 {
                     PPH_MODULE_ITEM moduleItem = PhGetSelectedModuleItem(&modulesContext->ListContext);
@@ -646,7 +635,13 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
 
                     if (moduleItem)
                     {
-                        PhShellProperties(hwndDlg, moduleItem->FileName->Buffer);
+                        PhShellExecuteUserString(
+                            hwndDlg,
+                            L"ProgramInspectExecutables",
+                            moduleItem->FileName->Buffer,
+                            FALSE,
+                            L"Make sure the PE Viewer executable file is present."
+                            );
                     }
                 }
                 break;
@@ -654,8 +649,8 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
                 {
                     PPH_STRING text;
 
-                    text = PhGetTreeNewText(tnHandle, 0);
-                    PhSetClipboardString(tnHandle, &text->sr);
+                    text = PhGetTreeNewText(modulesContext->TreeNewHandle, 0);
+                    PhSetClipboardString(modulesContext->TreeNewHandle, &text->sr);
                     PhDereferenceObject(text);
                 }
                 break;
@@ -667,7 +662,9 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
                     PPH_EMENU_ITEM mappedItem;
                     PPH_EMENU_ITEM staticItem;
                     PPH_EMENU_ITEM verifiedItem;
+                    PPH_EMENU_ITEM systemItem;
                     PPH_EMENU_ITEM untrustedItem;
+                    PPH_EMENU_ITEM systemHighlightItem;
                     PPH_EMENU_ITEM dotnetItem;
                     PPH_EMENU_ITEM immersiveItem;
                     PPH_EMENU_ITEM relocatedItem;
@@ -680,11 +677,13 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
                     PhInsertEMenuItem(menu, mappedItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_MAPPED_OPTION, L"Hide mapped", NULL, NULL), ULONG_MAX);
                     PhInsertEMenuItem(menu, staticItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_STATIC_OPTION, L"Hide static", NULL, NULL), ULONG_MAX);
                     PhInsertEMenuItem(menu, verifiedItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_SIGNED_OPTION, L"Hide verified", NULL, NULL), ULONG_MAX);
+                    PhInsertEMenuItem(menu, systemItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_SYSTEM_OPTION, L"Hide system", NULL, NULL), ULONG_MAX);
                     PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
                     PhInsertEMenuItem(menu, dotnetItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_HIGHLIGHT_DOTNET_OPTION, L"Highlight .NET modules", NULL, NULL), ULONG_MAX);
                     PhInsertEMenuItem(menu, immersiveItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_HIGHLIGHT_IMMERSIVE_OPTION, L"Highlight immersive modules", NULL, NULL), ULONG_MAX);
                     PhInsertEMenuItem(menu, relocatedItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_HIGHLIGHT_RELOCATED_OPTION, L"Highlight relocated modules", NULL, NULL), ULONG_MAX);
                     PhInsertEMenuItem(menu, untrustedItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_HIGHLIGHT_UNSIGNED_OPTION, L"Highlight untrusted modules", NULL, NULL), ULONG_MAX);
+                    PhInsertEMenuItem(menu, systemHighlightItem = PhCreateEMenuItem(0, PH_MODULE_FLAGS_HIGHLIGHT_SYSTEM_OPTION, L"Highlight system modules", NULL, NULL), ULONG_MAX);
                     PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
                     PhInsertEMenuItem(menu, PhCreateEMenuItem(0, PH_MODULE_FLAGS_LOAD_MODULE_OPTION, L"Load module...", NULL, NULL), ULONG_MAX);
                     //PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
@@ -698,6 +697,8 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
                         staticItem->Flags |= PH_EMENU_CHECKED;
                     if (modulesContext->ListContext.HideSignedModules)
                         verifiedItem->Flags |= PH_EMENU_CHECKED;
+                    if (modulesContext->ListContext.HideSystemModules)
+                        systemItem->Flags |= PH_EMENU_CHECKED;
                     if (modulesContext->ListContext.HighlightDotNetModules)
                         dotnetItem->Flags |= PH_EMENU_CHECKED;
                     if (modulesContext->ListContext.HighlightImmersiveModules)
@@ -706,6 +707,8 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
                         relocatedItem->Flags |= PH_EMENU_CHECKED;
                     if (modulesContext->ListContext.HighlightUntrustedModules)
                         untrustedItem->Flags |= PH_EMENU_CHECKED;
+                    if (modulesContext->ListContext.HighlightSystemModules)
+                        systemHighlightItem->Flags |= PH_EMENU_CHECKED;
 
                     selectedItem = PhShowEMenu(
                         menu,
@@ -771,6 +774,18 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
             }
         }
         break;
+    case WM_KEYDOWN:
+        {
+            if (LOWORD(wParam) == 'K')
+            {
+                if (GetKeyState(VK_CONTROL) < 0)
+                {
+                    SetFocus(modulesContext->SearchboxHandle);
+                    return TRUE;
+                }
+            }
+        }
+        break;
     case WM_PH_MODULES_UPDATED:
         {
             ULONG upToRunId = (ULONG)wParam;
@@ -782,7 +797,7 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
 
             if (events)
             {
-                TreeNew_SetRedraw(tnHandle, FALSE);
+                TreeNew_SetRedraw(modulesContext->TreeNewHandle, FALSE);
 
                 for (i = 0; i < count; i++)
                 {
@@ -822,24 +837,24 @@ INT_PTR CALLBACK PhpProcessModulesDlgProc(
 
                 if (NT_SUCCESS(status))
                 {
-                    TreeNew_SetEmptyText(tnHandle, &EmptyModulesText, 0);
+                    TreeNew_SetEmptyText(modulesContext->TreeNewHandle, &EmptyModulesText, 0);
                 }
                 else
                 {
                     message = PhGetStatusMessage(status, 0);
                     PhMoveReference(&modulesContext->ErrorMessage, PhFormatString(L"Unable to query module information:\n%s", PhGetStringOrDefault(message, L"Unknown error.")));
                     PhClearReference(&message);
-                    TreeNew_SetEmptyText(tnHandle, &modulesContext->ErrorMessage->sr, 0);
+                    TreeNew_SetEmptyText(modulesContext->TreeNewHandle, &modulesContext->ErrorMessage->sr, 0);
                 }
 
-                InvalidateRect(tnHandle, NULL, FALSE);
+                InvalidateRect(modulesContext->TreeNewHandle, NULL, FALSE);
             }
 
             // Refresh the visible nodes.
             PhApplyTreeNewFilters(&modulesContext->ListContext.TreeFilterSupport);
 
             if (count != 0)
-                TreeNew_SetRedraw(tnHandle, TRUE);
+                TreeNew_SetRedraw(modulesContext->TreeNewHandle, TRUE);
         }
         break;
     }

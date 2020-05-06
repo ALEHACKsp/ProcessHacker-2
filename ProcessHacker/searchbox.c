@@ -37,7 +37,8 @@ typedef struct _EDIT_CONTEXT
             ULONG ThemeSupport : 1;
             ULONG Hot : 1;
             ULONG Pushed : 1;
-            ULONG Spare : 29;
+            ULONG ColorMode : 8;
+            ULONG Spare : 21;
         };
     };
 
@@ -48,8 +49,7 @@ typedef struct _EDIT_CONTEXT
     HWND WindowHandle;
     WNDPROC DefaultWindowProc;
     HFONT WindowFont;
-    HICON BitmapActive;
-    HICON BitmapInactive;
+    HIMAGELIST ImageListHandle;
     HBRUSH BrushNormal;
     HBRUSH BrushPushed;
     HBRUSH BrushHot;
@@ -66,13 +66,11 @@ VOID PhpSearchFreeTheme(
     )
 {
     if (Context->BrushNormal)
-        DeleteObject(Context->BrushNormal);
-
+        DeleteBrush(Context->BrushNormal);
     if (Context->BrushHot)
-        DeleteObject(Context->BrushHot);
-
+        DeleteBrush(Context->BrushHot);
     if (Context->BrushPushed)
-        DeleteObject(Context->BrushPushed);
+        DeleteBrush(Context->BrushPushed);
 }
 
 VOID PhpSearchInitializeFont(
@@ -80,7 +78,7 @@ VOID PhpSearchInitializeFont(
     )
 {
     if (Context->WindowFont) 
-        DeleteObject(Context->WindowFont);
+        DeleteFont(Context->WindowFont);
 
     Context->WindowFont = PhCreateCommonFont(10, FW_MEDIUM, Context->WindowHandle);
 }
@@ -93,6 +91,7 @@ VOID PhpSearchInitializeTheme(
     Context->BrushNormal = GetSysColorBrush(COLOR_WINDOW);
     Context->BrushHot = CreateSolidBrush(RGB(205, 232, 255));
     Context->BrushPushed = CreateSolidBrush(RGB(153, 209, 255));
+    Context->ColorMode = PhGetIntegerSetting(L"GraphColorMode");
 
     if (IsThemeActive())
     {
@@ -134,27 +133,33 @@ VOID PhpSearchInitializeImages(
 
     Context->ImageWidth = GetSystemMetrics(SM_CXSMICON) + 4;
     Context->ImageHeight = GetSystemMetrics(SM_CYSMICON) + 4;
+    Context->ImageListHandle = ImageList_Create(
+        Context->ImageWidth,
+        Context->ImageHeight,
+        ILC_COLOR32,
+        2,
+        0
+        );
+    ImageList_SetImageCount(Context->ImageListHandle, 2);
 
     if (bitmap = PhLoadPngImageFromResource(PhInstanceHandle, Context->ImageWidth, Context->ImageHeight, MAKEINTRESOURCE(IDB_SEARCH_ACTIVE), TRUE))
     {
-        Context->BitmapActive = PhpSearchBitmapToIcon(bitmap, Context->ImageWidth, Context->ImageHeight);
-        DeleteObject(bitmap);
+        ImageList_Replace(Context->ImageListHandle, 0, bitmap, NULL);
+        DeleteBitmap(bitmap);
     }
-    else if (bitmap = LoadImage(PhInstanceHandle, MAKEINTRESOURCE(IDB_SEARCH_ACTIVE_BMP), IMAGE_BITMAP, 0, 0, 0))
+    else
     {
-        Context->BitmapActive = PhpSearchBitmapToIcon(bitmap, Context->ImageWidth, Context->ImageHeight);
-        DeleteObject(bitmap);
+        PhSetImageListBitmap(Context->ImageListHandle, 0, PhInstanceHandle, MAKEINTRESOURCE(IDB_SEARCH_ACTIVE_BMP));
     }
 
     if (bitmap = PhLoadPngImageFromResource(PhInstanceHandle, Context->ImageWidth, Context->ImageHeight, MAKEINTRESOURCE(IDB_SEARCH_INACTIVE), TRUE))
     {
-        Context->BitmapInactive = PhpSearchBitmapToIcon(bitmap, Context->ImageWidth, Context->ImageHeight);
-        DeleteObject(bitmap);
+        ImageList_Replace(Context->ImageListHandle, 1, bitmap, NULL);
+        DeleteBitmap(bitmap);
     }
-    else if (bitmap = LoadImage(PhInstanceHandle, MAKEINTRESOURCE(IDB_SEARCH_INACTIVE_BMP), IMAGE_BITMAP, 0, 0, 0))
+    else
     {
-        Context->BitmapInactive = PhpSearchBitmapToIcon(bitmap, Context->ImageWidth, Context->ImageHeight);
-        DeleteObject(bitmap);
+        PhSetImageListBitmap(Context->ImageListHandle, 1, PhInstanceHandle, MAKEINTRESOURCE(IDB_SEARCH_INACTIVE_BMP));
     }
 }
 
@@ -191,76 +196,172 @@ VOID PhpSearchDrawButton(
 
     bufferDc = CreateCompatibleDC(hdc);
     bufferBitmap = CreateCompatibleBitmap(hdc, bufferRect.right, bufferRect.bottom);
-    oldBufferBitmap = SelectObject(bufferDc, bufferBitmap);
+    oldBufferBitmap = SelectBitmap(bufferDc, bufferBitmap);
 
     if (Context->Pushed)
     {
-        FillRect(bufferDc, &bufferRect, Context->BrushPushed);
-        //FrameRect(bufferDc, &bufferRect, CreateSolidBrush(RGB(0xff, 0, 0)));
+        if (Context->ThemeSupport)
+        {
+            switch (Context->ColorMode)
+            {
+            case 0: // New colors
+                FillRect(bufferDc, &bufferRect, Context->BrushPushed);
+                break;
+            case 1: // Old colors
+                SetTextColor(bufferDc, GetSysColor(COLOR_HIGHLIGHTTEXT));
+                SetDCBrushColor(bufferDc, RGB(99, 99, 99));
+                FillRect(bufferDc, &bufferRect, GetStockBrush(DC_BRUSH));
+                break;
+            }
+        }
+        else
+        {
+            FillRect(bufferDc, &bufferRect, Context->BrushPushed);
+            //FrameRect(bufferDc, &bufferRect, CreateSolidBrush(RGB(0xff, 0, 0)));
+        }
     }
     else if (Context->Hot)
     {
-        FillRect(bufferDc, &bufferRect, Context->BrushHot);
-        //FrameRect(bufferDc, &bufferRect, CreateSolidBrush(RGB(38, 160, 218)));
+        if (Context->ThemeSupport)
+        {
+            switch (Context->ColorMode)
+            {
+            case 0: // New colors
+                FillRect(bufferDc, &bufferRect, Context->BrushHot);
+                break;
+            case 1: // Old colors
+                SetTextColor(bufferDc, GetSysColor(COLOR_HIGHLIGHTTEXT));
+                SetDCBrushColor(bufferDc, RGB(78, 78, 78));
+                FillRect(bufferDc, &bufferRect, GetStockBrush(DC_BRUSH));
+                break;
+            }
+        }
+        else
+        {
+            FillRect(bufferDc, &bufferRect, Context->BrushHot);
+            //FrameRect(bufferDc, &bufferRect, CreateSolidBrush(RGB(38, 160, 218)));
+        }
     }
     else
     {
-        FillRect(bufferDc, &bufferRect, Context->BrushNormal);
+        if (Context->ThemeSupport)
+        {
+            switch (Context->ColorMode)
+            {
+            case 0: // New colors
+                FillRect(bufferDc, &bufferRect, Context->BrushNormal);
+                break;
+            case 1: // Old colors
+                SetTextColor(bufferDc, GetSysColor(COLOR_HIGHLIGHTTEXT));
+                SetDCBrushColor(bufferDc, RGB(60, 60, 60));
+                FillRect(bufferDc, &bufferRect, GetStockBrush(DC_BRUSH));
+                break;
+            }
+
+        }
+        else
+        {
+            FillRect(bufferDc, &bufferRect, Context->BrushNormal);
+        }
     }
 
     if (Edit_GetTextLength(Context->WindowHandle) > 0)
     {
-        DrawIconEx(
+        ImageList_Draw(
+            Context->ImageListHandle,
+            0,
             bufferDc,
             bufferRect.left + 1, // offset
             bufferRect.top,
-            Context->BitmapActive,
-            Context->ImageWidth,
-            Context->ImageHeight,
-            0,
-            NULL,
-            DI_NORMAL
+            ILD_TRANSPARENT
             );
     }
     else
     {
-        DrawIconEx(
+        ImageList_Draw(
+            Context->ImageListHandle,
+            1,
             bufferDc,
             bufferRect.left + 2, // offset
             bufferRect.top + 1, // offset
-            Context->BitmapInactive,
-            Context->ImageWidth,
-            Context->ImageHeight,
-            0,
-            NULL,
-            DI_NORMAL
+            ILD_TRANSPARENT
             );
     }
 
     BitBlt(hdc, ButtonRect.left, ButtonRect.top, ButtonRect.right, ButtonRect.bottom, bufferDc, 0, 0, SRCCOPY);
-    SelectObject(bufferDc, oldBufferBitmap);
-    DeleteObject(bufferBitmap);
+    SelectBitmap(bufferDc, oldBufferBitmap);
+    DeleteBitmap(bufferBitmap);
     DeleteDC(bufferDc);
 
     if (Context->ThemeSupport) // HACK
     {
         if (GetFocus() == Context->WindowHandle)
         {
-            SetDCBrushColor(hdc, RGB(0x0, 0x66, 0xcc));
-            SelectObject(hdc, GetStockObject(DC_BRUSH));
-            PatBlt(hdc, WindowRect.left, WindowRect.top, 2, WindowRect.bottom - WindowRect.top, PATCOPY);
-            PatBlt(hdc, WindowRect.right - 2, WindowRect.top, 2, WindowRect.bottom - WindowRect.top, PATCOPY);
-            PatBlt(hdc, WindowRect.left, WindowRect.top, WindowRect.right - WindowRect.left, 2, PATCOPY);
-            PatBlt(hdc, WindowRect.left, WindowRect.bottom - 2, WindowRect.right - WindowRect.left, 2, PATCOPY);
+            switch (Context->ColorMode)
+            {
+            case 0: // New colors
+                SetDCBrushColor(hdc, RGB(0, 0, 0));
+                break;
+            case 1: // Old colors
+                SetDCBrushColor(hdc, RGB(65, 65, 65));
+                break;
+            }
+
+            SelectBrush(hdc, GetStockBrush(DC_BRUSH));
+            PatBlt(hdc, WindowRect.left, WindowRect.top, 1, WindowRect.bottom - WindowRect.top, PATCOPY);
+            PatBlt(hdc, WindowRect.right - 1, WindowRect.top, 1, WindowRect.bottom - WindowRect.top, PATCOPY);
+            PatBlt(hdc, WindowRect.left, WindowRect.top, WindowRect.right - WindowRect.left, 1, PATCOPY);
+            PatBlt(hdc, WindowRect.left, WindowRect.bottom - 1, WindowRect.right - WindowRect.left, 1, PATCOPY);
+
+            switch (Context->ColorMode)
+            {
+            case 0: // New colors
+                SetDCBrushColor(hdc, RGB(0xff, 0xff, 0xff));
+                break;
+            case 1: // Old colors
+                SetDCBrushColor(hdc, RGB(60, 60, 60));
+                break;
+            }
+
+            SelectBrush(hdc, GetStockBrush(DC_BRUSH));
+            PatBlt(hdc, WindowRect.left + 1, WindowRect.top + 1, 1, WindowRect.bottom - WindowRect.top - 2, PATCOPY);
+            PatBlt(hdc, WindowRect.right - 2, WindowRect.top + 1, 1, WindowRect.bottom - WindowRect.top - 2, PATCOPY);
+            PatBlt(hdc, WindowRect.left + 1, WindowRect.top + 1, WindowRect.right - WindowRect.left - 2, 1, PATCOPY);
+            PatBlt(hdc, WindowRect.left + 1, WindowRect.bottom - 2, WindowRect.right - WindowRect.left - 2, 1, PATCOPY);
         }
         else
-        {
-            SetDCBrushColor(hdc, RGB(65, 65, 65));
-            SelectObject(hdc, GetStockObject(DC_BRUSH));
-            PatBlt(hdc, WindowRect.left, WindowRect.top, 2, WindowRect.bottom - WindowRect.top, PATCOPY);
-            PatBlt(hdc, WindowRect.right - 2, WindowRect.top, 2, WindowRect.bottom - WindowRect.top, PATCOPY);
-            PatBlt(hdc, WindowRect.left, WindowRect.top, WindowRect.right - WindowRect.left, 2, PATCOPY);
-            PatBlt(hdc, WindowRect.left, WindowRect.bottom - 2, WindowRect.right - WindowRect.left, 2, PATCOPY);
+        {       
+            switch (Context->ColorMode)
+            {
+            case 0: // New colors
+                SetDCBrushColor(hdc, RGB(0, 0, 0));
+                break;
+            case 1: // Old colors
+                SetDCBrushColor(hdc, RGB(65, 65, 65));
+                break;
+            }
+
+            SelectBrush(hdc, GetStockBrush(DC_BRUSH));
+            PatBlt(hdc, WindowRect.left, WindowRect.top, 1, WindowRect.bottom - WindowRect.top, PATCOPY);
+            PatBlt(hdc, WindowRect.right - 1, WindowRect.top, 1, WindowRect.bottom - WindowRect.top, PATCOPY);
+            PatBlt(hdc, WindowRect.left, WindowRect.top, WindowRect.right - WindowRect.left, 1, PATCOPY);
+            PatBlt(hdc, WindowRect.left, WindowRect.bottom - 1, WindowRect.right - WindowRect.left, 1, PATCOPY);
+
+            switch (Context->ColorMode)
+            {
+            case 0: // New colors
+                SetDCBrushColor(hdc, RGB(0xff, 0xff, 0xff));
+                break;
+            case 1: // Old colors
+                SetDCBrushColor(hdc, RGB(60, 60, 60));
+                break;
+            }
+
+            SelectBrush(hdc, GetStockBrush(DC_BRUSH));
+            PatBlt(hdc, WindowRect.left + 1, WindowRect.top + 1, 1, WindowRect.bottom - WindowRect.top - 2, PATCOPY);
+            PatBlt(hdc, WindowRect.right - 2, WindowRect.top + 1, 1, WindowRect.bottom - WindowRect.top - 2, PATCOPY);
+            PatBlt(hdc, WindowRect.left + 1, WindowRect.top + 1, WindowRect.right - WindowRect.left - 2, 1, PATCOPY);
+            PatBlt(hdc, WindowRect.left + 1, WindowRect.bottom - 2, WindowRect.right - WindowRect.left - 2, 1, PATCOPY);
         }
     }
 
@@ -289,7 +390,16 @@ LRESULT CALLBACK PhpSearchWndSubclassProc(
             PhpSearchFreeTheme(context);
 
             if (context->WindowFont)
-                DeleteObject(context->WindowFont);
+            {
+                DeleteFont(context->WindowFont);
+                context->WindowFont = NULL;
+            }
+
+            if (context->ImageListHandle)
+            {
+                ImageList_Destroy(context->ImageListHandle);
+                context->ImageListHandle = NULL;
+            }
 
             SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)oldWndProc);
             PhRemoveWindowContext(hWnd, SHRT_MAX);
@@ -531,7 +641,7 @@ HICON PhpSearchBitmapToIcon(
 
     icon = CreateIconIndirect(&iconInfo);
 
-    DeleteObject(screenBitmap);
+    DeleteBitmap(screenBitmap);
     ReleaseDC(NULL, screenDc);
 
     return icon;
@@ -550,6 +660,7 @@ VOID PhCreateSearchControl(
 
     context->WindowHandle = WindowHandle;
     context->ThemeSupport = !!PhGetIntegerSetting(L"EnableThemeSupport"); // HACK
+    context->ColorMode = PhGetIntegerSetting(L"GraphColorMode");
 
     //PhpSearchInitializeTheme(context);
     PhpSearchInitializeImages(context);
@@ -593,12 +704,12 @@ HBITMAP PhLoadPngImageFromResource(
     WICPixelFormatGUID pixelFormat;
     WICRect rect = { 0, 0, Width, Height };
 
-    // Create the ImagingFactory
-    if (FAILED(CoCreateInstance(&CLSID_WICImagingFactory1, NULL, CLSCTX_INPROC_SERVER, &IID_IWICImagingFactory, &wicFactory)))
-        goto CleanupExit;
-
     // Load the resource
     if (!PhLoadResource(DllBase, Name, L"PNG", &resourceLength, &resourceBuffer))
+        goto CleanupExit;
+
+    // Create the ImagingFactory
+    if (FAILED(PhGetClassObject(L"windowscodecs.dll", &CLSID_WICImagingFactory1, &IID_IWICImagingFactory, &wicFactory)))
         goto CleanupExit;
 
     // Create the Stream
@@ -714,6 +825,147 @@ CleanupExit:
     if (success)
         return bitmapHandle;
 
-    DeleteObject(bitmapHandle);
+    DeleteBitmap(bitmapHandle);
+    return NULL;
+}
+
+HBITMAP PhLoadPngImageFromFile(
+    _In_ PWSTR FileName,
+    _In_ UINT Width,
+    _In_ UINT Height,
+    _In_ BOOLEAN RGBAImage
+    )
+{
+    BOOLEAN success = FALSE;
+    UINT frameCount = 0;
+    HDC screenHdc = NULL;
+    HDC bufferDc = NULL;
+    BITMAPINFO bitmapInfo = { 0 };
+    HBITMAP bitmapHandle = NULL;
+    PVOID bitmapBuffer = NULL;
+    IWICStream* wicStream = NULL;
+    IWICBitmapSource* wicBitmapSource = NULL;
+    IWICBitmapDecoder* wicDecoder = NULL;
+    IWICBitmapFrameDecode* wicFrame = NULL;
+    IWICImagingFactory* wicFactory = NULL;
+    IWICBitmapScaler* wicScaler = NULL;
+    WICPixelFormatGUID pixelFormat;
+    WICRect rect = { 0, 0, Width, Height };
+
+    // Create the ImagingFactory
+    if (FAILED(PhGetClassObject(L"windowscodecs.dll", &CLSID_WICImagingFactory1, &IID_IWICImagingFactory, &wicFactory)))
+        goto CleanupExit;
+
+    // Create the Stream
+    if (FAILED(IWICImagingFactory_CreateStream(wicFactory, &wicStream)))
+        goto CleanupExit;
+
+    // Initialize the Stream from Memory
+    if (FAILED(IWICStream_InitializeFromFilename(wicStream, FileName, GENERIC_READ)))
+        goto CleanupExit;
+
+    if (FAILED(IWICImagingFactory_CreateDecoder(wicFactory, &GUID_ContainerFormatPng, NULL, &wicDecoder)))
+        goto CleanupExit;
+
+    if (FAILED(IWICBitmapDecoder_Initialize(wicDecoder, (IStream*)wicStream, WICDecodeMetadataCacheOnLoad)))
+        goto CleanupExit;
+
+    // Get the Frame count
+    if (FAILED(IWICBitmapDecoder_GetFrameCount(wicDecoder, &frameCount)) || frameCount < 1)
+        goto CleanupExit;
+
+    // Get the Frame
+    if (FAILED(IWICBitmapDecoder_GetFrame(wicDecoder, 0, &wicFrame)))
+        goto CleanupExit;
+
+    // Get the WicFrame image format
+    if (FAILED(IWICBitmapFrameDecode_GetPixelFormat(wicFrame, &pixelFormat)))
+        goto CleanupExit;
+
+    // Check if the image format is supported:
+    if (IsEqualGUID(&pixelFormat, RGBAImage ? &GUID_WICPixelFormat32bppPRGBA : &GUID_WICPixelFormat32bppPBGRA))
+    {
+        wicBitmapSource = (IWICBitmapSource*)wicFrame;
+    }
+    else
+    {
+        IWICFormatConverter* wicFormatConverter = NULL;
+
+        if (FAILED(IWICImagingFactory_CreateFormatConverter(wicFactory, &wicFormatConverter)))
+            goto CleanupExit;
+
+        if (FAILED(IWICFormatConverter_Initialize(
+            wicFormatConverter,
+            (IWICBitmapSource*)wicFrame,
+            RGBAImage ? &GUID_WICPixelFormat32bppPRGBA : &GUID_WICPixelFormat32bppPBGRA,
+            WICBitmapDitherTypeNone,
+            NULL,
+            0.0,
+            WICBitmapPaletteTypeCustom
+            )))
+        {
+            IWICFormatConverter_Release(wicFormatConverter);
+            goto CleanupExit;
+        }
+
+        // Convert the image to the correct format:
+        IWICFormatConverter_QueryInterface(wicFormatConverter, &IID_IWICBitmapSource, &wicBitmapSource);
+
+        // Cleanup the converter.
+        IWICFormatConverter_Release(wicFormatConverter);
+
+        // Dispose the old frame now that the converted frame is in wicBitmapSource.
+        IWICBitmapFrameDecode_Release(wicFrame);
+    }
+
+    bitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bitmapInfo.bmiHeader.biWidth = rect.Width;
+    bitmapInfo.bmiHeader.biHeight = -((LONG)rect.Height);
+    bitmapInfo.bmiHeader.biPlanes = 1;
+    bitmapInfo.bmiHeader.biBitCount = 32;
+    bitmapInfo.bmiHeader.biCompression = BI_RGB;
+
+    screenHdc = GetDC(NULL);
+    bufferDc = CreateCompatibleDC(screenHdc);
+    bitmapHandle = CreateDIBSection(screenHdc, &bitmapInfo, DIB_RGB_COLORS, &bitmapBuffer, NULL, 0);
+
+    // Check if it's the same rect as the requested size.
+    //if (width != rect.Width || height != rect.Height)
+    if (FAILED(IWICImagingFactory_CreateBitmapScaler(wicFactory, &wicScaler)))
+        goto CleanupExit;
+    if (FAILED(IWICBitmapScaler_Initialize(wicScaler, wicBitmapSource, rect.Width, rect.Height, WICBitmapInterpolationModeFant)))
+        goto CleanupExit;
+    if (FAILED(IWICBitmapScaler_CopyPixels(wicScaler, &rect, rect.Width * 4, rect.Width * rect.Height * 4, (PBYTE)bitmapBuffer)))
+        goto CleanupExit;
+
+    success = TRUE;
+
+CleanupExit:
+
+    if (wicScaler)
+        IWICBitmapScaler_Release(wicScaler);
+
+    if (bufferDc)
+        DeleteDC(bufferDc);
+
+    if (screenHdc)
+        ReleaseDC(NULL, screenHdc);
+
+    if (wicBitmapSource)
+        IWICBitmapSource_Release(wicBitmapSource);
+
+    if (wicStream)
+        IWICStream_Release(wicStream);
+
+    if (wicDecoder)
+        IWICBitmapDecoder_Release(wicDecoder);
+
+    if (wicFactory)
+        IWICImagingFactory_Release(wicFactory);
+
+    if (success)
+        return bitmapHandle;
+
+    DeleteBitmap(bitmapHandle);
     return NULL;
 }

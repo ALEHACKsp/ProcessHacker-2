@@ -2,7 +2,7 @@
  * Process Hacker Plugins -
  *   Update Checker Plugin
  *
- * Copyright (C) 2011-2019 dmex
+ * Copyright (C) 2011-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -51,6 +51,8 @@ VOID UpdateContextDeleteProcedure(
         PhDereferenceObject(context->SetupFileSignature);
     if (context->BuildMessage)
         PhDereferenceObject(context->BuildMessage);
+    if (context->CommitHash)
+        PhDereferenceObject(context->CommitHash);
 }
 
 PPH_UPDATER_CONTEXT CreateUpdateContext(
@@ -198,36 +200,79 @@ PPH_STRING UpdateWindowsString(
     VOID
     )
 {
-    static PH_STRINGREF keyName = PH_STRINGREF_INIT(L"Software\\Microsoft\\Windows NT\\CurrentVersion");
+    PPH_STRING buildString = NULL;
+    PPH_STRING fileName = NULL;
+    PPH_STRING fileVersion = NULL;
+    PVOID versionInfo;
+    VS_FIXEDFILEINFO* rootBlock;
+    ULONG rootBlockLength;
+    PH_FORMAT fileVersionFormat[3];
 
-    HANDLE keyHandle;
-    PPH_STRING buildLabHeader = NULL;
+    fileName = PhGetKernelFileName();
+    PhMoveReference(&fileName, PhGetFileName(fileName));
+    versionInfo = PhGetFileVersionInfo(fileName->Buffer);
+    PhDereferenceObject(fileName);
 
-    if (NT_SUCCESS(PhOpenKey(
-        &keyHandle,
-        KEY_READ,
-        PH_KEY_LOCAL_MACHINE,
-        &keyName,
-        0
-        )))
+    if (versionInfo)
     {
-        PPH_STRING buildLabString;
+        if (VerQueryValue(versionInfo, L"\\", &rootBlock, &rootBlockLength) && rootBlockLength != 0)
+        {
+            PhInitFormatU(&fileVersionFormat[0], HIWORD(rootBlock->dwFileVersionLS));
+            PhInitFormatC(&fileVersionFormat[1], '.');
+            PhInitFormatU(&fileVersionFormat[2], LOWORD(rootBlock->dwFileVersionLS));
 
-        if (buildLabString = PhQueryRegistryString(keyHandle, L"BuildLabEx"))
-        {
-            buildLabHeader = PhConcatStrings2(L"ProcessHacker-OsBuild: ", buildLabString->Buffer);
-            PhDereferenceObject(buildLabString);
-        }
-        else if (buildLabString = PhQueryRegistryString(keyHandle, L"BuildLab"))
-        {
-            buildLabHeader = PhConcatStrings2(L"ProcessHacker-OsBuild: ", buildLabString->Buffer);
-            PhDereferenceObject(buildLabString);
+            fileVersion = PhFormat(fileVersionFormat, 3, 30);
         }
 
-        NtClose(keyHandle);
+        PhFree(versionInfo);
     }
 
-    return buildLabHeader;
+    if (fileVersion)
+    {
+        if (PhIsExecutingInWow64())
+            buildString = PhFormatString(L"%s: %s.%s", L"ProcessHacker-OsBuild", fileVersion->Buffer, L"x86fre");
+        else
+            buildString = PhFormatString(L"%s: %s.%s", L"ProcessHacker-OsBuild", fileVersion->Buffer, L"amd64fre");
+
+        PhDereferenceObject(fileVersion);
+    }
+
+    return buildString;
+
+    //
+    // NOTE: Some security products have started randomizing the build string located in the registry
+    // breaking the version check that blocks updates that are not compatible with old and unsupported
+    // versions of Windows. (dmex)
+    //
+    //static PH_STRINGREF keyName = PH_STRINGREF_INIT(L"Software\\Microsoft\\Windows NT\\CurrentVersion");
+    //HANDLE keyHandle;
+    //PPH_STRING buildLabHeader = NULL;
+    //
+    //if (NT_SUCCESS(PhOpenKey(
+    //    &keyHandle,
+    //    KEY_READ,
+    //    PH_KEY_LOCAL_MACHINE,
+    //    &keyName,
+    //    0
+    //    )))
+    //{
+    //    PPH_STRING buildLabString;
+    //
+    //    if (buildLabString = PhQueryRegistryString(keyHandle, L"BuildLabEx"))
+    //    {
+    //        buildLabHeader = PhConcatStrings2(L"ProcessHacker-OsBuild: ", buildLabString->Buffer);
+    //        PhDereferenceObject(buildLabString);
+    //    }
+    //    else if (buildLabString = PhQueryRegistryString(keyHandle, L"BuildLab"))
+    //    {
+    //        buildLabHeader = PhConcatStrings2(L"ProcessHacker-OsBuild: ", buildLabString->Buffer);
+    //        PhDereferenceObject(buildLabString);
+    //    }
+    //
+    //    NtClose(keyHandle);
+    //}
+    //
+    //return buildLabHeader;
 }
 
 ULONG64 ParseVersionString(
@@ -239,9 +284,9 @@ ULONG64 ParseVersionString(
 
     PhInitializeStringRef(&remaining, PhGetStringOrEmpty(VersionString));
 
-    PhSplitStringRefAtChar(&remaining, '.', &majorPart, &remaining);
-    PhSplitStringRefAtChar(&remaining, '.', &minorPart, &remaining);
-    PhSplitStringRefAtChar(&remaining, '.', &revisionPart, &remaining);
+    PhSplitStringRefAtChar(&remaining, L'.', &majorPart, &remaining);
+    PhSplitStringRefAtChar(&remaining, L'.', &minorPart, &remaining);
+    PhSplitStringRefAtChar(&remaining, L'.', &revisionPart, &remaining);
 
     PhStringToInteger64(&majorPart, 10, &majorInteger);
     PhStringToInteger64(&minorPart, 10, &minorInteger);
@@ -256,7 +301,8 @@ ULONG64 ParseVersionString(
 }
 
 BOOLEAN QueryUpdateData(
-    _Inout_ PPH_UPDATER_CONTEXT Context
+    _Inout_ PPH_UPDATER_CONTEXT Context,
+    _In_ BOOLEAN UseSourceForge
     )
 {
     BOOLEAN success = FALSE;
@@ -270,27 +316,56 @@ BOOLEAN QueryUpdateData(
         goto CleanupExit;
     }
 
-    if (!PhHttpSocketConnect(
-        httpContext, 
-        L"wj32.org", 
-        PH_HTTP_DEFAULT_HTTPS_PORT
-        ))
+    if (UseSourceForge)
     {
-        Context->ErrorCode = GetLastError();
-        goto CleanupExit;
+        if (!PhHttpSocketConnect(
+            httpContext,
+            L"processhacker.sourceforge.io",
+            PH_HTTP_DEFAULT_HTTPS_PORT
+            ))
+        {
+            Context->ErrorCode = GetLastError();
+            goto CleanupExit;
+        }
+
+        if (!PhHttpSocketBeginRequest(
+            httpContext,
+            NULL,
+            L"/nightly.php?phupdater",
+            PH_HTTP_FLAG_REFRESH | PH_HTTP_FLAG_SECURE
+            ))
+        {
+            Context->ErrorCode = GetLastError();
+            goto CleanupExit;
+        }
+    }
+    else
+    {
+        if (!PhHttpSocketConnect(
+            httpContext,
+            L"wj32.org",
+            PH_HTTP_DEFAULT_HTTPS_PORT
+            ))
+        {
+            Context->ErrorCode = GetLastError();
+            goto CleanupExit;
+        }
+
+        if (!PhHttpSocketBeginRequest(
+            httpContext,
+            NULL,
+            L"/processhacker/nightly.php?phupdater",
+            PH_HTTP_FLAG_REFRESH | PH_HTTP_FLAG_SECURE
+            ))
+        {
+            Context->ErrorCode = GetLastError();
+            goto CleanupExit;
+        }
+
+        // HACK workaround wj32.org certificate issues. (dmex)
+        PhHttpSocketSetSecurity(httpContext, PH_HTTP_SECURITY_IGNORE_CERT_DATE_INVALID);
     }
 
-    if (!PhHttpSocketBeginRequest(
-        httpContext, 
-        NULL, 
-        L"/processhacker/nightly.php?phupdater", 
-        PH_HTTP_FLAG_REFRESH | PH_HTTP_FLAG_SECURE
-        ))
-    {
-        Context->ErrorCode = GetLastError();
-        goto CleanupExit;
-    }
-  
     {
         PPH_STRING versionHeader;
         PPH_STRING windowsHeader;
@@ -336,6 +411,7 @@ BOOLEAN QueryUpdateData(
     Context->SetupFileHash = PhGetJsonValueAsString(jsonObject, "setup_hash");
     Context->SetupFileSignature = PhGetJsonValueAsString(jsonObject, "setup_sig");
     Context->BuildMessage = PhGetJsonValueAsString(jsonObject, "changelog");
+    Context->CommitHash = PhGetJsonValueAsString(jsonObject, "commit");
 
     Context->CurrentVersion = ParseVersionString(Context->CurrentVersionString);
 #ifdef FORCE_LATEST_VERSION
@@ -360,6 +436,8 @@ BOOLEAN QueryUpdateData(
         goto CleanupExit;
     if (PhIsNullOrEmptyString(Context->BuildMessage))
         goto CleanupExit;
+    if (PhIsNullOrEmptyString(Context->CommitHash))
+        goto CleanupExit;
 
     success = TRUE;
 
@@ -379,7 +457,7 @@ CleanupExit:
 
         for (SIZE_T i = 0; i < Context->BuildMessage->Length / sizeof(WCHAR); i++)
         {
-            if (Context->BuildMessage->Data[i] == '\n')
+            if (Context->BuildMessage->Data[i] == L'\n')
                 PhAppendStringBuilder2(&sb, L"\r\n");
             else
                 PhAppendCharStringBuilder(&sb, Context->BuildMessage->Data[i]);
@@ -407,8 +485,11 @@ NTSTATUS UpdateCheckSilentThread(
     PhDelayExecution(5 * 1000);
 
     // Query latest update information from the server.
-    if (!QueryUpdateData(context))
-        goto CleanupExit;
+    if (!QueryUpdateData(context, FALSE))
+    {
+        if (!QueryUpdateData(context, TRUE))
+            goto CleanupExit;
+    }
 
     // Compare the current version against the latest available version
     if (context->CurrentVersion < context->LatestVersion)
@@ -444,10 +525,15 @@ NTSTATUS UpdateCheckThread(
 
     PhInitializeAutoPool(&autoPool);
 
+    PhClearCacheDirectory(); // HACK
+
     // Check if we have cached update data
     if (!context->HaveData)
     {
-        context->HaveData = QueryUpdateData(context);
+        context->HaveData = QueryUpdateData(context, FALSE);
+
+        if (!context->HaveData)
+            context->HaveData = QueryUpdateData(context, TRUE);
     }
 
     if (!context->HaveData)
@@ -675,25 +761,26 @@ NTSTATUS UpdateDownloadThread(
             // TODO: Update on timer callback.
             {
                 FLOAT percent = ((FLOAT)downloadedBytes / contentLength * 100);
-                PPH_STRING totalLength = PhFormatSize(contentLength, ULONG_MAX);
-                PPH_STRING totalDownloaded = PhFormatSize(downloadedBytes, ULONG_MAX);
-                PPH_STRING totalSpeed = PhFormatSize(timeBitsPerSecond, ULONG_MAX);
+                PH_FORMAT format[9];
+                WCHAR string[MAX_PATH];
 
-                PPH_STRING statusMessage = PhFormatString(
-                    L"Downloaded: %s of %s (%.0f%%)\r\nSpeed: %s/s",
-                    PhGetStringOrEmpty(totalDownloaded),
-                    PhGetStringOrEmpty(totalLength),
-                    percent,
-                    PhGetStringOrEmpty(totalSpeed)
-                    );
+                // L"Downloaded: %s of %s (%.0f%%)\r\nSpeed: %s/s"
+                PhInitFormatS(&format[0], L"Downloaded: ");
+                PhInitFormatSize(&format[1], downloadedBytes);
+                PhInitFormatS(&format[2], L" of ");
+                PhInitFormatSize(&format[3], contentLength);
+                PhInitFormatS(&format[4], L" (");
+                PhInitFormatF(&format[5], percent, 1);
+                PhInitFormatS(&format[6], L"%)\r\nSpeed: ");
+                PhInitFormatSize(&format[7], timeBitsPerSecond);
+                PhInitFormatS(&format[8], L"/s");
 
-                SendMessage(context->DialogHandle, TDM_UPDATE_ELEMENT_TEXT, TDE_CONTENT, (LPARAM)statusMessage->Buffer);
+                if (PhFormatToBuffer(format, RTL_NUMBER_OF(format), string, sizeof(string), NULL))
+                {
+                    SendMessage(context->DialogHandle, TDM_UPDATE_ELEMENT_TEXT, TDE_CONTENT, (LPARAM)string);
+                }
+
                 SendMessage(context->DialogHandle, TDM_SET_PROGRESS_BAR_POS, (WPARAM)percent, 0);
-
-                PhDereferenceObject(statusMessage);
-                PhDereferenceObject(totalSpeed);
-                PhDereferenceObject(totalLength);
-                PhDereferenceObject(totalDownloaded);
             }
         }
 
@@ -877,7 +964,7 @@ HRESULT CALLBACK TaskDialogBootstrapCallback(
             UpdateDialogHandle = context->DialogHandle = hwndDlg;
 
             // Center the update window on PH if it's visible else we center on the desktop.
-            PhCenterWindow(hwndDlg, (IsWindowVisible(PhMainWndHandle) && !IsMinimized(PhMainWndHandle)) ? PhMainWndHandle : NULL);
+            PhCenterWindow(hwndDlg, PhMainWndHandle);
 
             // Create the Taskdialog icons.
             TaskDialogCreateIcons(context);
@@ -943,9 +1030,9 @@ VOID ShowUpdateDialog(
 {
     if (!UpdateDialogThreadHandle)
     {
-        if (!(UpdateDialogThreadHandle = PhCreateThread(0, ShowUpdateDialogThread, Context)))
+        if (!NT_SUCCESS(PhCreateThreadEx(&UpdateDialogThreadHandle, ShowUpdateDialogThread, Context)))
         {
-            PhShowStatus(PhMainWndHandle, L"Unable to create the updater window.", 0, GetLastError());
+            PhShowError(PhMainWndHandle, L"Unable to create the window.");
             return;
         }
 

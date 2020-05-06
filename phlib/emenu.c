@@ -3,6 +3,7 @@
  *   extended menus
  *
  * Copyright (C) 2010-2011 wj32
+ * Copyright (C) 2019 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -60,7 +61,7 @@ static const PH_FLAG_MAPPING EMenuStateMappings[] =
 PPH_EMENU_ITEM PhCreateEMenuItem(
     _In_ ULONG Flags,
     _In_ ULONG Id,
-    _In_ PWSTR Text,
+    _In_opt_ PWSTR Text,
     _In_opt_ HBITMAP Bitmap,
     _In_opt_ PVOID Context
     )
@@ -97,7 +98,7 @@ VOID PhpDestroyEMenuItem(
     if ((Item->Flags & PH_EMENU_TEXT_OWNED) && Item->Text)
         PhFree(Item->Text);
     if ((Item->Flags & PH_EMENU_BITMAP_OWNED) && Item->Bitmap)
-        DeleteObject(Item->Bitmap);
+        DeleteBitmap(Item->Bitmap);
 
     if (Item->Items)
     {
@@ -223,9 +224,9 @@ PPH_EMENU_ITEM PhFindEMenuItemEx(
 
         if (Flags & PH_EMENU_FIND_DESCEND)
         {
-            PPH_EMENU_ITEM foundItem;
-            PPH_EMENU_ITEM foundParent;
-            ULONG foundIndex;
+            PPH_EMENU_ITEM foundItem = NULL;
+            PPH_EMENU_ITEM foundParent = NULL;
+            ULONG foundIndex = 0;
 
             foundItem = PhFindEMenuItemEx(item, Flags, Text, Id, &foundParent, &foundIndex);
 
@@ -444,10 +445,16 @@ HMENU PhEMenuToHMenu(
 {
     HMENU menuHandle;
 
-    menuHandle = CreatePopupMenu();
-
-    if (!menuHandle)
-        return NULL;
+    if ((Menu->Flags & PH_EMENU_MAINMENU) == PH_EMENU_MAINMENU)
+    {
+        if (!(menuHandle = CreateMenu()))
+            return NULL;
+    }
+    else
+    {
+        if (!(menuHandle = CreatePopupMenu()))
+            return NULL;
+    }
 
     PhEMenuToHMenu2(menuHandle, Menu, Flags, Data);
 
@@ -460,10 +467,10 @@ HMENU PhEMenuToHMenu(
         menuInfo.fMask = MIM_STYLE;
         menuInfo.dwStyle = MNS_CHECKORBMP;
 
-        if (PhGetIntegerSetting(L"EnableThemeSupport"))
+        if (WindowsVersion < WINDOWS_10_19H2 && PhGetIntegerSetting(L"EnableThemeSupport"))
         {
-            menuInfo.fMask |= MIM_BACKGROUND;
-            menuInfo.hbrBack = PhMenuBackgroundBrush;
+            menuInfo.fMask |= MIM_BACKGROUND | MIM_APPLYTOSUBMENUS;
+            menuInfo.hbrBack = CreateSolidBrush(RGB(28, 28, 28)); // LEAK (dmex)
         }
 
         SetMenuInfo(menuHandle, &menuInfo);
@@ -527,10 +534,17 @@ VOID PhEMenuToHMenu2(
 
         if (item->Bitmap)
         {
-            if (!PhGetIntegerSetting(L"EnableThemeSupport"))
-                menuItemInfo.fMask |= MIIM_BITMAP; // HACK
-
             menuItemInfo.hbmpItem = item->Bitmap;
+
+            if (WindowsVersion < WINDOWS_10_19H2)
+            {
+                if (!PhGetIntegerSetting(L"EnableThemeSupport"))
+                    menuItemInfo.fMask |= MIIM_BITMAP;
+            }
+            else
+            {
+                menuItemInfo.fMask |= MIIM_BITMAP;
+            }
         }
 
         // Id
@@ -579,18 +593,22 @@ VOID PhEMenuToHMenu2(
             menuItemInfo.hSubMenu = PhEMenuToHMenu(item, Flags, Data);
         }
 
-        // Theme
-
-        if (PhGetIntegerSetting(L"EnableThemeSupport")) // HACK
+        // Themes
+        if (WindowsVersion < WINDOWS_10_19H2)
         {
-            switch (PhGetIntegerSetting(L"GraphColorMode"))
+            if (PhGetIntegerSetting(L"EnableThemeSupport"))
             {
-            case 0: // New colors
                 menuItemInfo.fType |= MFT_OWNERDRAW;
-                break;
-            case 1: // Old colors
-                menuItemInfo.fType |= MFT_OWNERDRAW;
-                break;
+            }
+        }
+        else
+        {
+            if (item->Flags & PH_EMENU_MAINMENU)
+            {
+                if (PhGetIntegerSetting(L"EnableThemeSupport"))
+                {
+                    menuItemInfo.fType |= MFT_OWNERDRAW;
+                }
             }
         }
 
@@ -680,7 +698,7 @@ VOID PhLoadResourceEMenuItem(
     HMENU menu;
     HMENU realMenu;
 
-    menu = LoadMenu(InstanceHandle, Resource);
+    menu = PhLoadMenu(InstanceHandle, Resource);
 
     if (SubMenuIndex != ULONG_MAX)
         realMenu = GetSubMenu(menu, SubMenuIndex);
@@ -856,7 +874,7 @@ VOID PhModifyEMenuItem(
     if (ModifyFlags & PH_EMENU_MODIFY_BITMAP)
     {
         if ((Item->Flags & PH_EMENU_BITMAP_OWNED) && Item->Bitmap)
-            DeleteObject(Item->Bitmap);
+            DeleteBitmap(Item->Bitmap);
 
         Item->Bitmap = Bitmap;
         Item->Flags &= ~PH_EMENU_BITMAP_OWNED;

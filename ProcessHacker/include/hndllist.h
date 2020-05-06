@@ -44,6 +44,7 @@ typedef struct _PH_HANDLE_NODE
 
     PPH_STRING GrantedAccessSymbolicText;
     WCHAR FileShareAccessText[4];
+    WCHAR ObjectString[PH_PTR_STR_LEN_1];
 // begin_phapppub
 } PH_HANDLE_NODE, *PPH_HANDLE_NODE;
 // end_phapppub
@@ -58,12 +59,14 @@ typedef struct _PH_HANDLE_LIST_CONTEXT
     PH_SORT_ORDER TreeNewSortOrder;
     PH_CM_MANAGER Cm;
 
+    BOOLEAN EnableStateHighlighting;
+
     union
     {
         ULONG Flags;
         struct
         {
-            ULONG EnableStateHighlighting : 1;
+            ULONG Reserved : 1;
             ULONG HideUnnamedHandles : 1;
             ULONG HideEtwHandles : 1;
             ULONG Spare : 22;

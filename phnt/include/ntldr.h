@@ -557,6 +557,30 @@ LdrUnregisterDllNotification(
 
 // end_msdn
 
+// rev
+NTSYSAPI
+PUNICODE_STRING
+NTAPI
+LdrStandardizeSystemPath(
+    _In_ PUNICODE_STRING SystemPath
+    );
+
+#if (PHNT_VERSION >= PHNT_WINBLUE)
+typedef struct _LDR_FAILURE_DATA
+{
+    NTSTATUS Status;
+    WCHAR DllName[0x20];
+    WCHAR AdditionalInfo[0x20];
+} LDR_FAILURE_DATA, *PLDR_FAILURE_DATA;
+
+NTSYSAPI
+PLDR_FAILURE_DATA
+NTAPI
+LdrGetFailureData(
+    VOID
+    );
+#endif
+
 // private
 typedef struct _PS_MITIGATION_OPTIONS_MAP
 {
@@ -936,6 +960,16 @@ NTAPI
 LdrControlFlowGuardEnforced(
     VOID
     );
+
+#if (PHNT_VERSION >= PHNT_19H1)
+// rev
+NTSYSAPI
+BOOLEAN
+NTAPI
+LdrIsModuleSxsRedirected(
+    _In_ PVOID DllHandle
+    );
+#endif
 
 #endif // (PHNT_MODE != PHNT_MODE_KERNEL)
 

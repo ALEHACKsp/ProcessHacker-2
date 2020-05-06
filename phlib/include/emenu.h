@@ -16,6 +16,7 @@ extern "C" {
 
 #define PH_EMENU_SEPARATECHECKSPACE 0x100000
 #define PH_EMENU_SEPARATOR 0x200000
+#define PH_EMENU_MAINMENU 0x400000
 
 #define PH_EMENU_TEXT_OWNED 0x80000000
 #define PH_EMENU_BITMAP_OWNED 0x40000000
@@ -48,7 +49,7 @@ PHLIBAPI
 PPH_EMENU_ITEM PhCreateEMenuItem(
     _In_ ULONG Flags,
     _In_ ULONG Id,
-    _In_ PWSTR Text,
+    _In_opt_ PWSTR Text,
     _In_opt_ HBITMAP Bitmap,
     _In_opt_ PVOID Context
     );
@@ -227,6 +228,18 @@ VOID PhSetDisabledEMenuItem(
     )
 {
     Item->Flags |= PH_EMENU_DISABLED;
+}
+
+FORCEINLINE
+VOID PhSetEnabledEMenuItem(
+    _In_ PPH_EMENU_ITEM Item,
+    _In_ BOOLEAN Enable
+    )
+{
+    if (Enable)
+        Item->Flags &= ~PH_EMENU_DISABLED;
+    else
+        Item->Flags |= PH_EMENU_DISABLED;
 }
 
 #ifdef __cplusplus

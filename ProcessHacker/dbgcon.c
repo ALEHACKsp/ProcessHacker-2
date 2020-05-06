@@ -94,7 +94,7 @@ VOID PhShowDebugConsole(
         _wfreopen(L"CONOUT$", L"w", stderr);
         _wfreopen(L"CONIN$", L"r", stdin);
 
-        DebugConsoleThreadHandle = PhCreateThread(0, PhpDebugConsoleThreadStart, NULL);
+        PhCreateThreadEx(&DebugConsoleThreadHandle, PhpDebugConsoleThreadStart, NULL);
     }
     else
     {
@@ -144,6 +144,9 @@ static BOOLEAN NTAPI PhpLoadCurrentProcessSymbolsCallback(
     _In_opt_ PVOID Context
     )
 {
+    if (!Context)
+        return TRUE;
+
     PhLoadModuleSymbolProvider((PPH_SYMBOL_PROVIDER)Context, Module->FileName->Buffer,
         (ULONG64)Module->BaseAddress, Module->Size);
 
@@ -433,11 +436,14 @@ static NTSTATUS PhpLeakEnumerationRoutine(
             symbol = PhGetSymbolFromAddress(DebugConsoleSymbolProvider, (ULONG64)StackTrace[i], NULL, NULL, NULL, NULL);
 
             if (symbol)
+            {
                 wprintf(L"\t%s\n", symbol->Buffer);
+                PhDereferenceObject(symbol);
+            }
             else
+            {
                 wprintf(L"\t?\n");
-
-            PhDereferenceObject(symbol);
+            }
         }
 
         NumberOfLeaksShown++;
@@ -623,7 +629,7 @@ static VOID PhpTestRwLock(
 
     for (i = 0; i < RW_PROCESSORS; i++)
     {
-        threadHandles[i] = PhCreateThread(0, PhpRwLockTestThreadStart, Context);
+        PhCreateThreadEx(&threadHandles[i], PhpRwLockTestThreadStart, Context);
     }
 
     PhWaitForBarrier(&RwStartBarrier, FALSE);
@@ -652,13 +658,6 @@ VOID FASTCALL PhfReleaseCriticalSection(
     RtlLeaveCriticalSection(CriticalSection);
 }
 
-VOID FASTCALL PhfReleaseQueuedLockExclusiveUsingInline(
-    _In_ PPH_QUEUED_LOCK QueuedLock
-    )
-{
-    PhReleaseQueuedLockExclusive(QueuedLock);
-}
-
 NTSTATUS PhpDebugConsoleThreadStart(
     _In_ PVOID Parameter
     )
@@ -672,14 +671,11 @@ NTSTATUS PhpDebugConsoleThreadStart(
     PhLoadSymbolProviderOptions(DebugConsoleSymbolProvider);
 
     {
-        static UNICODE_STRING variableNameUs = RTL_CONSTANT_STRING(L"_NT_SYMBOL_PATH");
-        UNICODE_STRING variableValueUs;
+        static PH_STRINGREF variableNameSr = PH_STRINGREF_INIT(L"_NT_SYMBOL_PATH");
+        PPH_STRING variableValue;
         PPH_STRING newSearchPath;
-        WCHAR buffer[MAX_PATH];
 
-        RtlInitEmptyUnicodeString(&variableValueUs, buffer, sizeof(buffer));
-
-        if (NT_SUCCESS(RtlQueryEnvironmentVariable_U(NULL, &variableNameUs, &variableValueUs)))
+        if (NT_SUCCESS(PhQueryEnvironmentVariable(NULL, &variableNameSr, &variableValue)))
         {
             PPH_STRING currentDirectory = PhGetApplicationDirectory();
             PPH_STRING currentSearchPath = PhGetStringSetting(L"DbgHelpSearchPath");
@@ -688,7 +684,7 @@ NTSTATUS PhpDebugConsoleThreadStart(
             {
                 newSearchPath = PhFormatString(
                     L"%s;%s;%s",
-                    buffer,
+                    variableValue->Buffer,
                     PhGetStringOrEmpty(currentSearchPath),
                     PhGetStringOrEmpty(currentDirectory)
                     );
@@ -697,13 +693,14 @@ NTSTATUS PhpDebugConsoleThreadStart(
             {
                 newSearchPath = PhFormatString(
                     L"%s;%s",
-                    buffer,
+                    variableValue->Buffer,
                     PhGetStringOrEmpty(currentDirectory)
                     );
             }
 
             PhSetSearchPathSymbolProvider(DebugConsoleSymbolProvider, PhGetString(newSearchPath));
 
+            PhDereferenceObject(variableValue);
             PhDereferenceObject(newSearchPath);
             PhDereferenceObject(currentDirectory);
         }
@@ -1472,7 +1469,7 @@ NTSTATUS PhpDebugConsoleThreadStart(
                     wprintf(L"Process item at %Ix: %s (%u)\n", (ULONG_PTR)process, process->ProcessName->Buffer, HandleToUlong(process->ProcessId));
                     wprintf(L"\tRecord at %Ix\n", (ULONG_PTR)process->Record);
                     wprintf(L"\tQuery handle %Ix\n", (ULONG_PTR)process->QueryHandle);
-                    wprintf(L"\tFile name at %Ix: %s\n", (ULONG_PTR)process->FileName, PhGetStringOrDefault(process->FileName, L"(null)"));
+                    wprintf(L"\tFile name at %Ix: %s\n", (ULONG_PTR)process->FileNameWin32, PhGetStringOrDefault(process->FileNameWin32, L"(null)"));
                     wprintf(L"\tCommand line at %Ix: %s\n", (ULONG_PTR)process->CommandLine, PhGetStringOrDefault(process->CommandLine, L"(null)"));
                     wprintf(L"\tFlags: %u\n", process->Flags);
                     wprintf(L"\n");

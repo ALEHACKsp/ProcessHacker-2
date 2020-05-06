@@ -237,8 +237,9 @@ static BOOLEAN LoadSymbolsEnumGenericModulesCallback(
     )
 {
     PPH_THREAD_SYMBOL_LOAD_CONTEXT context = Context;
-    PPH_SYMBOL_PROVIDER symbolProvider = context->SymbolProvider;
 
+    if (!context)
+        return FALSE;
     if (context->ThreadProvider->Terminating)
         return FALSE;
 
@@ -252,7 +253,7 @@ static BOOLEAN LoadSymbolsEnumGenericModulesCallback(
     }
 
     PhLoadModuleSymbolProvider(
-        symbolProvider,
+        context->SymbolProvider,
         Module->FileName->Buffer,
         (ULONG64)Module->BaseAddress,
         Module->Size
@@ -267,8 +268,9 @@ static BOOLEAN LoadBasicSymbolsEnumGenericModulesCallback(
     )
 {
     PPH_THREAD_SYMBOL_LOAD_CONTEXT context = Context;
-    PPH_SYMBOL_PROVIDER symbolProvider = context->SymbolProvider;
 
+    if (!context)
+        return FALSE;
     if (context->ThreadProvider->Terminating)
         return FALSE;
 
@@ -276,7 +278,7 @@ static BOOLEAN LoadBasicSymbolsEnumGenericModulesCallback(
         PhEqualString2(Module->Name, L"kernel32.dll", TRUE))
     {
         PhLoadModuleSymbolProvider(
-            symbolProvider,
+            context->SymbolProvider,
             Module->FileName->Buffer,
             (ULONG64)Module->BaseAddress,
             Module->Size
@@ -710,7 +712,7 @@ VOID PhpThreadProviderCallbackHandler(
     _In_opt_ PVOID Context
     )
 {
-    if (PhProcessInformation)
+    if (Context && PhProcessInformation)
     {
         PhpThreadProviderUpdate((PPH_THREAD_PROVIDER)Context, PhProcessInformation);
     }
@@ -933,14 +935,14 @@ VOID PhpThreadProviderUpdate(
                 PhTrimToNullTerminatorString(threadItem->StartAddressString);
             }
 
-            PhpQueueThreadQuery(threadProvider, threadItem);
-
             // Is it a GUI thread?
             {
                 GUITHREADINFO info = { sizeof(GUITHREADINFO) };
 
                 threadItem->IsGuiThread = !!GetGUIThreadInfo(HandleToUlong(threadItem->ThreadId), &info);
             }
+
+            PhpQueueThreadQuery(threadProvider, threadItem);
 
             // Add the thread item to the hashtable.
             PhAcquireFastLockExclusive(&threadProvider->ThreadHashtableLock);

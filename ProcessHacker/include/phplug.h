@@ -62,6 +62,7 @@ typedef enum _PH_GENERAL_CALLBACK
     GeneralCallbackLoggedEvent,
     GeneralCallbackTrayIconsInitializing,
     GeneralCallbackWindowNotifyEvent,
+    GeneralCallbackProcessStatsNotifyEvent,
     GeneralCallbackMaximum
 } PH_GENERAL_CALLBACK, *PPH_GENERAL_CALLBACK;
 
@@ -127,6 +128,14 @@ typedef struct _PH_PLUGIN_OBJECT_PROPERTIES
     ULONG MaximumNumberOfPages;
     HPROPSHEETPAGE *Pages;
 } PH_PLUGIN_OBJECT_PROPERTIES, *PPH_PLUGIN_OBJECT_PROPERTIES;
+
+typedef struct _PH_PLUGIN_PROCESS_STATS_EVENT
+{
+    ULONG Version;
+    ULONG Type;
+    PPH_PROCESS_ITEM ProcessItem;
+    PVOID Parameter;
+} PH_PLUGIN_PROCESS_STATS_EVENT, *PPH_PLUGIN_PROCESS_STATS_EVENT;
 
 typedef struct _PH_PLUGIN_HANDLE_PROPERTIES_CONTEXT
 {
@@ -352,6 +361,7 @@ typedef struct _PH_PLUGIN_MINIINFO_POINTERS
  * \param Plugin A plugin instance structure.
  * \param SubId An identifier for the column. This should be unique within the
  * plugin.
+ * \param Guid A unique guid for this icon.
  * \param Context A user-defined value.
  * \param Text A string describing the notification icon.
  * \param Flags A combination of flags.
@@ -362,6 +372,7 @@ typedef struct _PH_PLUGIN_MINIINFO_POINTERS
 typedef struct _PH_NF_ICON * (NTAPI *PPH_REGISTER_TRAY_ICON)(
     _In_ struct _PH_PLUGIN * Plugin,
     _In_ ULONG SubId,
+    _In_ GUID Guid,
     _In_opt_ PVOID Context,
     _In_ PWSTR Text,
     _In_ ULONG Flags,
@@ -397,7 +408,7 @@ typedef PPH_OPTIONS_SECTION (NTAPI *PPH_OPTIONS_CREATE_SECTION)(
     _In_ PVOID Instance,
     _In_ PWSTR Template,
     _In_ DLGPROC DialogProc,
-    _In_ PVOID Parameter
+    _In_opt_ PVOID Parameter
     );
 
 typedef PPH_OPTIONS_SECTION (NTAPI *PPH_OPTIONS_FIND_SECTION)(
@@ -721,6 +732,7 @@ PhPluginEnableTreeNewNotify(
     );
 
 PHAPPAPI
+_Success_(return)
 BOOLEAN
 NTAPI
 PhPluginQueryPhSvc(

@@ -15,10 +15,12 @@ EXT BOOLEAN PhEnableProcessQueryStage2;
 EXT BOOLEAN PhEnableServiceQueryStage2;
 EXT BOOLEAN PhEnableThemeSupport;
 EXT BOOLEAN PhEnableTooltipSupport;
+EXT BOOLEAN PhEnableLinuxSubsystemSupport;
+EXT BOOLEAN PhEnableNetworkResolveDoHSupport;
 
-EXT ULONG PhCsCollapseServicesOnStart;
 EXT ULONG PhCsForceNoParent;
 EXT ULONG PhCsHighlightingDuration;
+EXT ULONG PhCsHideOtherUserProcesses;
 EXT ULONG PhCsPropagateCpuUsage;
 EXT ULONG PhCsScrollToNewProcesses;
 EXT ULONG PhCsShowCpuBelow001;
