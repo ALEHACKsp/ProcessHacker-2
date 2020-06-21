@@ -89,7 +89,7 @@ NTSTATUS PhInitializePhLibEx(
     if (!PhQueuedLockInitialization())
         return STATUS_UNSUCCESSFUL;
 
-    if (!NT_SUCCESS(PhRefInitialization()))
+    if (!PhRefInitialization())
         return STATUS_UNSUCCESSFUL;
 
     if (!PhBaseInitialization())
@@ -172,7 +172,11 @@ VOID PhInitializeWindowsVersion(
     // Windows 10, Windows Server 2016
     else if (majorVersion == 10 && minorVersion == 0)
     {
-        if (buildVersion >= 18363)
+        if (buildVersion >= 19041)
+        {
+            WindowsVersion = WINDOWS_10_20H1;
+        }
+        else if (buildVersion >= 18363)
         {
             WindowsVersion = WINDOWS_10_19H2;
         }
