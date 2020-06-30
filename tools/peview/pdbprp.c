@@ -2,7 +2,7 @@
  * PE viewer -
  *   pdb support
  *
- * Copyright (C) 2017 dmex
+ * Copyright (C) 2017-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -21,7 +21,6 @@
  */
 
 #include <peview.h>
-#include <pdb.h>
 #include <emenu.h>
 #include "colmgr.h"
 
@@ -641,7 +640,7 @@ END_SORT_FUNCTION
 
 BEGIN_SORT_FUNCTION(Size)
 {
-    sortResult = uintcmp(node1->Size, node2->Size);
+    sortResult = uint64cmp(node1->Size, node2->Size);
 }
 END_SORT_FUNCTION
 
@@ -908,9 +907,9 @@ VOID PvInitializeSymbolTree(
 
     TreeNew_SetSort(TreeNewHandle, TREE_COLUMN_ITEM_VA, AscendingSortOrder);
 
-    PPH_STRING settings = PhGetStringSetting(L"PdbTreeListColumns");
-    PhCmLoadSettings(TreeNewHandle, &settings->sr);
-    PhDereferenceObject(settings);
+    //PPH_STRING settings = PhGetStringSetting(L"PdbTreeListColumns");
+    //PhCmLoadSettings(TreeNewHandle, &settings->sr);
+    //PhDereferenceObject(settings);
 
     PhInitializeTreeNewFilterSupport(&Context->FilterSupport, TreeNewHandle, Context->NodeList);
 }
@@ -1033,15 +1032,12 @@ BOOLEAN PvSymbolTreeFilterCallback(
     return FALSE;
 }
 
-VOID CALLBACK PvSymbolTreeUpdateCallback(
-    _In_ PPDB_SYMBOL_CONTEXT Context,
-    _In_ BOOLEAN TimerOrWaitFired
+VOID PvAddPendingSymbolNodes(
+    _In_ PPDB_SYMBOL_CONTEXT Context
     )
 {
     ULONG i;
-
-    if (!Context->UpdateTimerHandle)
-        return;
+    BOOLEAN needsFullUpdate = FALSE;
 
     TreeNew_SetRedraw(Context->TreeNewHandle, FALSE);
 
@@ -1050,13 +1046,26 @@ VOID CALLBACK PvSymbolTreeUpdateCallback(
     for (i = SearchResultsAddIndex; i < SearchResults->Count; i++)
     {
         PvSymbolAddTreeNode(Context, SearchResults->Items[i]);
+        needsFullUpdate = TRUE;
     }
     SearchResultsAddIndex = i;
 
     PhReleaseQueuedLockExclusive(&SearchResultsLock);
 
-    TreeNew_NodesStructured(Context->TreeNewHandle);
+    if (needsFullUpdate)
+        TreeNew_NodesStructured(Context->TreeNewHandle);
     TreeNew_SetRedraw(Context->TreeNewHandle, TRUE);
+}
+
+VOID CALLBACK PvSymbolTreeUpdateCallback(
+    _In_ PPDB_SYMBOL_CONTEXT Context,
+    _In_ BOOLEAN TimerOrWaitFired
+    )
+{
+    if (!Context->UpdateTimerHandle)
+        return;
+
+    PvAddPendingSymbolNodes(Context);
 
     RtlUpdateTimer(PhGetGlobalTimerQueue(), Context->UpdateTimerHandle, 1000, INFINITE);
 }
@@ -1087,9 +1096,7 @@ INT_PTR CALLBACK PvpSymbolsDlgProc(
         {
             HANDLE treeNewTimer = NULL;
 
-            context = propPageContext->Context = PhAllocate(sizeof(PDB_SYMBOL_CONTEXT));
-            memset(context, 0, sizeof(PDB_SYMBOL_CONTEXT));
-
+            context = propPageContext->Context = PhAllocateZero(sizeof(PDB_SYMBOL_CONTEXT));
             context->DialogHandle = hwndDlg;
             context->TreeNewHandle = GetDlgItem(hwndDlg, IDC_SYMBOLTREE);
             context->SearchHandle = GetDlgItem(hwndDlg, IDC_SYMSEARCH);
@@ -1176,17 +1183,13 @@ INT_PTR CALLBACK PvpSymbolsDlgProc(
         break;
     case WM_PV_SEARCH_FINISHED:
         {
-            // Add any un-added items.
-            //SendMessage(hwndDlg, WM_PV_SEARCH_UPDATE, 0, 0);
+            if (context->UpdateTimerHandle)
+            {
+                RtlDeleteTimer(PhGetGlobalTimerQueue(), context->UpdateTimerHandle, NULL);
+                context->UpdateTimerHandle = NULL;
+            }
 
-            //NtWaitForSingleObject(context->SearchThreadHandle, FALSE, NULL);
-            //SearchStop = FALSE;
-
-            //if (context->UpdateTimerHandle)
-            //{
-            //    RtlDeleteTimer(PhGetGlobalTimerQueue(), context->UpdateTimerHandle, NULL);
-            //    context->UpdateTimerHandle = NULL;
-            //}
+            PvAddPendingSymbolNodes(context);
         }
         break;
     case WM_PV_SEARCH_SHOWMENU:
