@@ -1726,6 +1726,146 @@ PVOID PhGetFileVersionInfo(
     return NULL;
 }
 
+typedef struct _VS_VERSION_INFO_STRUCT16
+{
+    USHORT Length;
+    USHORT ValueLength;
+    CHAR Key[1];
+} VS_VERSION_INFO_STRUCT16, *PVS_VERSION_INFO_STRUCT16;
+
+typedef struct _VS_VERSION_INFO_STRUCT32
+{
+    USHORT Length;
+    USHORT ValueLength;
+    USHORT Type;
+    WCHAR Key[1];
+} VS_VERSION_INFO_STRUCT32, *PVS_VERSION_INFO_STRUCT32;
+
+// Note: Based on VersionInfoIs16 from ReactOS with modifications (dmex)
+BOOLEAN PhpVersionInfo_IsVersion16(
+    _In_ PVS_VERSION_INFO_STRUCT32 VersionInfo
+    )
+{
+    return ((PVS_VERSION_INFO_STRUCT16)VersionInfo)->Key[0] >= 32;
+}
+
+// Note: Based on VersionInfo32_Value from ReactOS with modifications (dmex)
+PVOID PhpVersionInfo_GetValue32(
+    _In_ PVS_VERSION_INFO_STRUCT32 VersionInfo
+    )
+{
+    PWSTR offset = VersionInfo->Key + PhCountStringZ(VersionInfo->Key) + 1;
+
+    return PTR_ADD_OFFSET(VersionInfo, ALIGN_UP(PTR_SUB_OFFSET(offset, VersionInfo), ULONG));
+}
+
+// Note: Based on VersionInfo32_Children from ReactOS with modifications (dmex)
+PVOID PhpVersionInfo_GetChildren32(
+    _In_ PVS_VERSION_INFO_STRUCT32 VersionInfo
+    )
+{
+    USHORT offset = VersionInfo->ValueLength * (VersionInfo->Type ? sizeof(WCHAR) : sizeof(BYTE));
+
+    return PTR_ADD_OFFSET(PhpVersionInfo_GetValue32(VersionInfo), ALIGN_UP(offset, ULONG));
+}
+
+// Note: Based on VersionInfo32_Next from ReactOS with modifications (dmex)
+PVOID PhpVersionInfo_GetNext32(
+    _In_ PVS_VERSION_INFO_STRUCT32 VersionInfo
+    )
+{
+    return PTR_ADD_OFFSET(VersionInfo, ALIGN_UP(VersionInfo->Length, ULONG));
+}
+
+// Note: Based on VersionInfo32_FindChild from ReactOS with modifications (dmex)
+PVOID PhpVersionInfo_FindChild32(
+    _In_ PVS_VERSION_INFO_STRUCT32 VersionInfo,
+    _In_ PWSTR Key,
+    _In_ ULONG KeyLength
+    )
+{
+    PVS_VERSION_INFO_STRUCT32 child = PhpVersionInfo_GetChildren32(VersionInfo);
+
+    while ((ULONG_PTR)child < (ULONG_PTR)VersionInfo + VersionInfo->Length)
+    {
+        if (_wcsnicmp(child->Key, Key, KeyLength) == 0 && !child->Key[KeyLength])
+            return child;
+
+        if (child->Length == 0)
+            return NULL;
+
+        child = PhpVersionInfo_GetNext32(child);
+    }
+
+    return NULL;
+}
+
+// Note: Based on VersionInfo32_QueryValue from ReactOS with modifications (dmex)
+_Success_(return)
+BOOLEAN PhpVersionInfo_QueryInfo32(
+    _In_ PVOID VersionInfo,
+    _In_ PWSTR VersionInfoKey,
+    _Out_opt_ PVOID* Buffer,
+    _Out_opt_ PULONG BufferLength
+    )
+{
+    PVS_VERSION_INFO_STRUCT32 blockInfo = VersionInfo;
+    PWSTR blockKeyName = VersionInfoKey;
+    PWSTR blockKeySlash;
+    ULONG blockKeyLength;
+
+    while (*blockKeyName)
+    {
+        for (blockKeySlash = blockKeyName; *blockKeySlash; blockKeySlash++)
+        {
+            if (*blockKeySlash == OBJ_NAME_PATH_SEPARATOR)
+                break;
+        }
+
+        if (blockKeySlash == blockKeyName)
+        {
+            blockKeyName++;
+            continue;
+        }
+
+        blockKeyLength = PtrToUlong(PTR_SUB_OFFSET(blockKeySlash, blockKeyName)) / sizeof(WCHAR);
+        blockInfo = PhpVersionInfo_FindChild32(blockInfo, blockKeyName, blockKeyLength);
+
+        if (!blockInfo)
+            return FALSE;
+
+        blockKeyName = blockKeySlash;
+    }
+
+    if (Buffer)
+        *Buffer = PhpVersionInfo_GetValue32(blockInfo);
+    if (BufferLength)
+        *BufferLength = blockInfo->ValueLength;
+
+    return TRUE;
+}
+
+_Success_(return)
+BOOLEAN PhGetFileVersionInfoValue(
+    _In_ PVOID VersionInfo,
+    _In_ PWSTR VersionInfoKey,
+    _Out_opt_ PVOID* Buffer,
+    _Out_opt_ PULONG BufferLength
+    )
+{
+    if (PhpVersionInfo_IsVersion16(VersionInfo))
+        return FALSE;
+
+    __try
+    {
+        return PhpVersionInfo_QueryInfo32(VersionInfo, VersionInfoKey, Buffer, BufferLength);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return FALSE;
+    }
+}
+
 /**
  * Retrieves the language ID and code page used by a version information block.
  *
@@ -1738,7 +1878,7 @@ ULONG PhGetFileVersionInfoLangCodePage(
     PVOID buffer;
     ULONG length;
 
-    if (VerQueryValue(VersionInfo, L"\\VarFileInfo\\Translation", &buffer, &length))
+    if (PhGetFileVersionInfoValue(VersionInfo, L"\\VarFileInfo\\Translation", &buffer, &length))
     {
         // Combine the language ID and code page.
         return (*(PUSHORT)buffer << 16) + *((PUSHORT)buffer + 1);
@@ -1763,7 +1903,7 @@ PPH_STRING PhGetFileVersionInfoString(
     PVOID buffer;
     ULONG length;
 
-    if (VerQueryValue(VersionInfo, SubBlock, &buffer, &length))
+    if (PhGetFileVersionInfoValue(VersionInfo, SubBlock, &buffer, &length))
     {
         PPH_STRING string;
 
@@ -1865,7 +2005,7 @@ BOOLEAN PhInitializeImageVersionInfo(
     }
 
     // The version information is language-independent and must be read from the root block.
-    if (VerQueryValue(versionInfo, L"\\", &rootBlock, &rootBlockLength) && rootBlockLength != 0)
+    if (PhGetFileVersionInfoValue(versionInfo, L"\\", &rootBlock, &rootBlockLength) && rootBlockLength != 0)
     {
         PhInitFormatU(&fileVersionFormat[0], HIWORD(rootBlock->dwFileVersionMS));
         PhInitFormatC(&fileVersionFormat[1], L'.');
@@ -5977,6 +6117,17 @@ PVOID PhGetDllBaseProcedureAddress(
         );
 }
 
+PVOID PhGetDllBaseProcAddress(
+    _In_ PVOID BaseAddress,
+    _In_opt_ PSTR ProcedureName
+    )
+{
+    if (IS_INTRESOURCE(ProcedureName))
+        return PhGetDllBaseProcedureAddress(BaseAddress, NULL, PtrToUshort(ProcedureName));
+
+    return PhGetDllBaseProcedureAddress(BaseAddress, ProcedureName, 0);
+}
+
 PVOID PhGetDllProcedureAddress(
     _In_ PWSTR DllName,
     _In_opt_ PSTR ProcedureName,
@@ -6606,6 +6757,153 @@ CleanupExit:
     return status;
 }
 
+NTSTATUS PhpLoaderEntryQuerySectionInformation(
+    _In_ HANDLE SectionHandle
+    )
+{
+    SECTION_IMAGE_INFORMATION section;
+    NTSTATUS status;
+
+    memset(&section, 0, sizeof(SECTION_IMAGE_INFORMATION));
+
+    status = NtQuerySection(
+        SectionHandle,
+        SectionImageInformation,
+        &section,
+        sizeof(SECTION_IMAGE_INFORMATION),
+        NULL
+        );
+
+    if (!NT_SUCCESS(status))
+        return status;
+
+    if (section.SubSystemType != IMAGE_SUBSYSTEM_WINDOWS_GUI)
+        return STATUS_INVALID_IMPORT_OF_NON_DLL;
+    if (!(section.ImageCharacteristics & IMAGE_FILE_DLL | IMAGE_FILE_EXECUTABLE_IMAGE))
+        return STATUS_INVALID_IMPORT_OF_NON_DLL;
+
+#ifdef _WIN64
+    if (section.Machine != IMAGE_FILE_MACHINE_AMD64 && section.Machine != IMAGE_FILE_MACHINE_ARM64)
+        return STATUS_IMAGE_MACHINE_TYPE_MISMATCH;
+#else
+    if (section.Machine != IMAGE_FILE_MACHINE_I386)
+        return STATUS_IMAGE_MACHINE_TYPE_MISMATCH;
+#endif
+
+    return status;
+}
+
+NTSTATUS PhLoaderEntryLoadDll(
+    _In_ PWSTR FileName,
+    _Out_ PVOID* BaseAddress
+    )
+{
+    NTSTATUS status;
+    HANDLE fileHandle;
+    HANDLE sectionHandle;
+    PVOID imageBaseAddress;
+    SIZE_T imageBaseOffset;
+
+    status = PhCreateFileWin32(
+        &fileHandle,
+        FileName,
+        FILE_READ_DATA | FILE_EXECUTE | SYNCHRONIZE,
+        FILE_ATTRIBUTE_NORMAL,
+        FILE_SHARE_READ | FILE_SHARE_DELETE,
+        FILE_OPEN,
+        FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT
+        );
+
+    if (!NT_SUCCESS(status))
+        return status;
+
+    status = NtCreateSection(
+        &sectionHandle,
+        SECTION_QUERY | SECTION_MAP_EXECUTE,
+        NULL,
+        NULL,
+        PAGE_READONLY,
+        SEC_IMAGE,
+        fileHandle
+        );
+
+    NtClose(fileHandle);
+
+    if (!NT_SUCCESS(status))
+        return status;
+
+    status = PhpLoaderEntryQuerySectionInformation(
+        sectionHandle
+        );
+
+    if (!NT_SUCCESS(status))
+    {
+        NtClose(sectionHandle);
+        return status;
+    }
+
+    imageBaseAddress = NULL;
+    imageBaseOffset = 0;
+
+    status = NtMapViewOfSection(
+        sectionHandle,
+        NtCurrentProcess(),
+        &imageBaseAddress,
+        0,
+        0,
+        NULL,
+        &imageBaseOffset,
+        ViewUnmap,
+        0,
+        PAGE_EXECUTE
+        );
+
+    NtClose(sectionHandle);
+
+    if (NT_SUCCESS(status))
+    {
+        if (BaseAddress)
+        {
+            *BaseAddress = imageBaseAddress;
+        }
+    }
+
+    return status;
+}
+
+NTSTATUS PhLoaderEntryUnloadDll(
+    _In_ PVOID BaseAddress
+    )
+{
+    NTSTATUS status;
+    PIMAGE_NT_HEADERS imageNtHeaders;
+    PLDR_INIT_ROUTINE imageEntryRoutine;
+
+    status = PhGetLoaderEntryImageNtHeaders(
+        BaseAddress,
+        &imageNtHeaders
+        );
+
+    if (!NT_SUCCESS(status))
+        return status;
+
+    status = PhGetLoaderEntryImageEntryPoint(
+        BaseAddress,
+        imageNtHeaders,
+        &imageEntryRoutine
+        );
+
+    if (!NT_SUCCESS(status))
+        return status;
+
+    if (!imageEntryRoutine(BaseAddress, DLL_PROCESS_DETACH, NULL))
+        status = STATUS_DLL_INIT_FAILED;
+
+    NtUnmapViewOfSection(NtCurrentProcess(), BaseAddress);
+
+    return status;
+}
+
 NTSTATUS PhLoaderEntryLoadAllImportsForDll(
     _In_ PVOID BaseAddress,
     _In_ PSTR ImportDllName
@@ -6647,27 +6945,18 @@ NTSTATUS PhLoadAllImportsForDll(
         );
 }
 
-// dmex: This function and the other LoaderEntryImage functions don't belong in this file
-// and should be moved into mapimg.c at some stage.
 NTSTATUS PhLoadPluginImage(
     _In_ PPH_STRING FileName,
     _Out_opt_ PVOID *BaseAddress
     )
 {
     NTSTATUS status;
-    ULONG imageType;
     PVOID imageBaseAddress;
-    PIMAGE_NT_HEADERS imageHeaders;
+    PIMAGE_NT_HEADERS imageNtHeaders;
     PLDR_INIT_ROUTINE imageEntryRoutine;
-    UNICODE_STRING imageFileNameUs;
 
-    imageType = IMAGE_FILE_EXECUTABLE_IMAGE;
-    PhStringRefToUnicodeString(&FileName->sr, &imageFileNameUs);
-
-    status = LdrLoadDll(
-        NULL, 
-        &imageType, 
-        &imageFileNameUs,
+    status = PhLoaderEntryLoadDll(
+        FileName->Buffer,
         &imageBaseAddress
         );
 
@@ -6676,7 +6965,7 @@ NTSTATUS PhLoadPluginImage(
 
     status = PhGetLoaderEntryImageNtHeaders(
         imageBaseAddress, 
-        &imageHeaders
+        &imageNtHeaders
         );
 
     if (!NT_SUCCESS(status))
@@ -6684,7 +6973,7 @@ NTSTATUS PhLoadPluginImage(
 
     status = PhpFixupLoaderEntryImageImports(
         imageBaseAddress, 
-        imageHeaders
+        imageNtHeaders
         );
 
     if (!NT_SUCCESS(status))
@@ -6693,7 +6982,7 @@ NTSTATUS PhLoadPluginImage(
     //status = PhLoaderEntryLoadAllImportsForDll(imageBaseAddress, "ProcessHacker.exe");
     status = PhpFixupLoaderEntryImageDelayImports(
         imageBaseAddress,
-        imageHeaders,
+        imageNtHeaders,
         "ProcessHacker.exe"
         );
     if (!NT_SUCCESS(status))
@@ -6701,7 +6990,7 @@ NTSTATUS PhLoadPluginImage(
 
     status = PhGetLoaderEntryImageEntryPoint(
         imageBaseAddress, 
-        imageHeaders, 
+        imageNtHeaders,
         &imageEntryRoutine
         );
 
@@ -6720,7 +7009,7 @@ CleanupExit:
     }
     else
     {
-        LdrUnloadDll(imageBaseAddress);
+        PhLoaderEntryUnloadDll(imageBaseAddress);
     }
 
     return status;

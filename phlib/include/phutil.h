@@ -505,6 +505,17 @@ PhGetFileVersionInfo(
     );
 
 PHLIBAPI
+_Success_(return)
+BOOLEAN
+NTAPI
+PhGetFileVersionInfoValue(
+    _In_ PVOID VersionInfo,
+    _In_ PWSTR VersionInfoKey,
+    _Out_opt_ PVOID* Buffer,
+    _Out_opt_ PULONG BufferLength
+    );
+
+PHLIBAPI
 ULONG
 NTAPI
 PhGetFileVersionInfoLangCodePage(
@@ -1310,6 +1321,14 @@ NTAPI
 PhGetExportNameFromOrdinal(
     _In_ PVOID DllBase,
     _In_opt_ USHORT ProcedureNumber
+    );
+
+PHLIBAPI
+NTSTATUS
+NTAPI
+PhLoaderEntryLoadDll(
+    _In_ PWSTR FileName,
+    _Out_ PVOID* BaseAddress
     );
 
 PHLIBAPI
