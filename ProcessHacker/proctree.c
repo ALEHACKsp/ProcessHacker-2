@@ -216,6 +216,7 @@ VOID PhInitializeProcessTreeList(
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_CRITICAL, FALSE, L"Critical", 80, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_PIDHEX, FALSE, L"PID (Hex)", 50, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_CPUCORECYCLES, FALSE, L"CPU (relative)", 45, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
+    PhAddTreeNewColumnEx(hwnd, PHPRTLC_CET, FALSE, L"CET", 45, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
 
     TreeNew_SetRedraw(hwnd, TRUE);
 
@@ -1947,6 +1948,12 @@ BEGIN_SORT_FUNCTION(CpuCore)
 }
 END_SORT_FUNCTION
 
+BEGIN_SORT_FUNCTION(Cet)
+{
+    sortResult = uintcmp(node1->ProcessItem->IsCetEnabled, node2->ProcessItem->IsCetEnabled);
+}
+END_SORT_FUNCTION
+
 BOOLEAN NTAPI PhpProcessTreeNewCallback(
     _In_ HWND hwnd,
     _In_ PH_TREENEW_MESSAGE Message,
@@ -2073,6 +2080,7 @@ BOOLEAN NTAPI PhpProcessTreeNewCallback(
                         SORT_FUNCTION(Critical),
                         SORT_FUNCTION(HexPid),
                         SORT_FUNCTION(CpuCore),
+                        SORT_FUNCTION(Cet),
                     };
                     int (__cdecl *sortFunction)(const void *, const void *);
 
@@ -2992,6 +3000,10 @@ BOOLEAN NTAPI PhpProcessTreeNewCallback(
                         }
                     }
                 }
+                break;
+            case PHPRTLC_CET:
+                if (processItem->IsCetEnabled)
+                    PhInitializeStringRef(&getCellText->Text, L"CET");
                 break;
             default:
                 return FALSE;

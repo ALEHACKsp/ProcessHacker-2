@@ -31,6 +31,9 @@
 #include <modprv.h>
 #include <phsettings.h>
 
+// remove once IMAGE_GUARD_XFG_ENABLED is defined (TheEragon)
+#include <mapimg.h>
+
 BOOLEAN PhpModuleNodeHashtableEqualFunction(
     _In_ PVOID Entry1,
     _In_ PVOID Entry2
@@ -115,6 +118,7 @@ VOID PhInitializeModuleList(
     PhAddTreeNewColumnEx(Context->TreeNewHandle, PHMOTLC_FILESIZE, FALSE, L"File size", 70, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
     PhAddTreeNewColumnEx(Context->TreeNewHandle, PHMOTLC_ENTRYPOINT, FALSE, L"Entry point", 70, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
     PhAddTreeNewColumnEx(Context->TreeNewHandle, PHMOTLC_PARENTBASEADDRESS, FALSE, L"Parent base address", 70, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
+    PhAddTreeNewColumnEx(Context->TreeNewHandle, PHMOTLC_CET, FALSE, L"CET", 50, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
 
     TreeNew_SetRedraw(Context->TreeNewHandle, TRUE);
 
@@ -610,10 +614,19 @@ END_SORT_FUNCTION
 
 BEGIN_SORT_FUNCTION(CfGuard)
 {
+    // prefer XFG over CFG
     sortResult = intcmp(
-        moduleItem1->ImageDllCharacteristics & IMAGE_DLLCHARACTERISTICS_GUARD_CF,
-        moduleItem2->ImageDllCharacteristics & IMAGE_DLLCHARACTERISTICS_GUARD_CF
+        moduleItem1->GuardFlags & IMAGE_GUARD_XFG_ENABLED,
+        moduleItem2->GuardFlags & IMAGE_GUARD_XFG_ENABLED
+    );
+
+    if (sortResult == 0)
+    {
+        sortResult = intcmp(
+            moduleItem1->ImageDllCharacteristics & IMAGE_DLLCHARACTERISTICS_GUARD_CF,
+            moduleItem2->ImageDllCharacteristics & IMAGE_DLLCHARACTERISTICS_GUARD_CF
         );
+    }
 }
 END_SORT_FUNCTION
 
@@ -650,6 +663,15 @@ END_SORT_FUNCTION
 BEGIN_SORT_FUNCTION(ParentBaseAddress)
 {
     sortResult = uintptrcmp((ULONG_PTR)moduleItem1->ParentBaseAddress, (ULONG_PTR)moduleItem2->ParentBaseAddress);
+}
+END_SORT_FUNCTION
+
+BEGIN_SORT_FUNCTION(Cet)
+{
+    sortResult = intcmp(
+        moduleItem1->ImageDllCharacteristicsEx & IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT,
+        moduleItem2->ImageDllCharacteristicsEx & IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT
+    );
 }
 END_SORT_FUNCTION
 
@@ -716,7 +738,8 @@ BOOLEAN NTAPI PhpModuleTreeNewCallback(
                     SORT_FUNCTION(FileModifiedTime),
                     SORT_FUNCTION(FileSize),
                     SORT_FUNCTION(EntryPoint),
-                    SORT_FUNCTION(ParentBaseAddress)
+                    SORT_FUNCTION(ParentBaseAddress),
+                    SORT_FUNCTION(Cet),
                 };
                 int (__cdecl *sortFunction)(void *, const void *, const void *);
 
@@ -896,7 +919,12 @@ BOOLEAN NTAPI PhpModuleTreeNewCallback(
                 break;
             case PHMOTLC_CFGUARD:
                 if (moduleItem->ImageDllCharacteristics & IMAGE_DLLCHARACTERISTICS_GUARD_CF)
-                    PhInitializeStringRef(&getCellText->Text, L"CF Guard");
+                {
+                    if (moduleItem->GuardFlags & IMAGE_GUARD_XFG_ENABLED)
+                        PhInitializeStringRef(&getCellText->Text, L"XF Guard");
+                    else
+                        PhInitializeStringRef(&getCellText->Text, L"CF Guard");
+                }
                 break;
             case PHMOTLC_LOADTIME:
                 {
@@ -995,6 +1023,10 @@ BOOLEAN NTAPI PhpModuleTreeNewCallback(
                     PhPrintPointer(moduleItem->ParentBaseAddressString, moduleItem->ParentBaseAddress);
                     PhInitializeStringRefLongHint(&getCellText->Text, moduleItem->ParentBaseAddressString);
                 }
+                break;
+            case PHMOTLC_CET:
+                if (moduleItem->ImageDllCharacteristicsEx & IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT)
+                    PhInitializeStringRef(&getCellText->Text, L"CET");
                 break;
             default:
                 return FALSE;

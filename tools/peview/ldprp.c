@@ -62,6 +62,10 @@ PPH_STRING PvpGetPeGuardFlagsText(
         PhAppendStringBuilder2(&stringBuilder, L"Longjump table, ");
     if (GuardFlags & IMAGE_GUARD_RETPOLINE_PRESENT)
         PhAppendStringBuilder2(&stringBuilder, L"Retpoline present, ");
+    if (GuardFlags & IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT_V1 || GuardFlags & IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT_V2)
+        PhAppendStringBuilder2(&stringBuilder, L"EH continuation table, ");
+    if (GuardFlags & IMAGE_GUARD_XFG_ENABLED)
+        PhAppendStringBuilder2(&stringBuilder, L"XFG, ");
 
     if (PhEndsWithString2(stringBuilder.String, L", ", FALSE))
         PhRemoveEndStringBuilder(&stringBuilder, 2);
@@ -367,6 +371,11 @@ INT_PTR CALLBACK PvpPeLoadConfigDlgProc(
                 if (RTL_CONTAINS_FIELD((Config), (Config)->Size, VolatileMetadataPointer)) \
                 { \
                     ADD_VALUE(L"VolatileMetadataPointer", PhaFormatString(L"0x%Ix", (Config)->VolatileMetadataPointer)->Buffer); \
+                } \
+                if (RTL_CONTAINS_FIELD((Config), (Config)->Size, GuardEHContinuationTable)) \
+                { \
+                    ADD_VALUE(L"Guard EH Continuation table", PhaFormatString(L"0x%Ix", (Config)->GuardEHContinuationTable)->Buffer); \
+                    ADD_VALUE(L"Guard EH Continuation table entry count", PhaFormatUInt64((Config)->GuardEHContinuationCount, TRUE)->Buffer); \
                 } \
             }
 

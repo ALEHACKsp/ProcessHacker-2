@@ -192,6 +192,48 @@ PhUnloadRemoteMappedImage(
     _Inout_ PPH_REMOTE_MAPPED_IMAGE RemoteMappedImage
     );
 
+PHLIBAPI
+BOOLEAN
+NTAPI
+PhGetRemoteMappedImageDebugEntryByType(
+    _In_ HANDLE ProcessHandle,
+    _In_ PPH_REMOTE_MAPPED_IMAGE RemoteMappedImage,
+    _In_ ULONG Type,
+    _Out_opt_ ULONG* EntryLength,
+    _Out_ PVOID* EntryBuffer
+    );
+
+PHLIBAPI
+BOOLEAN
+NTAPI
+PhGetRemoteMappedImageDebugEntryByTypeEx(
+    _In_ HANDLE ProcessHandle,
+    _In_ PPH_REMOTE_MAPPED_IMAGE RemoteMappedImage,
+    _In_ ULONG Type,
+    _In_ PPH_READ_VIRTUAL_MEMORY_CALLBACK ReadVirtualMemoryCallback,
+    _Out_opt_ ULONG* EntryLength,
+    _Out_ PVOID* EntryBuffer
+    );
+
+PHLIBAPI
+BOOLEAN
+NTAPI
+PhGetRemoteMappedImageGuardFlags(
+    _In_ HANDLE ProcessHandle,
+    _In_ PPH_REMOTE_MAPPED_IMAGE RemoteMappedImage,
+    _Out_ PULONG GuardFlags
+);
+
+PHLIBAPI
+BOOLEAN
+NTAPI
+PhGetRemoteMappedImageGuardFlagsEx(
+    _In_ HANDLE ProcessHandle,
+    _In_ PPH_REMOTE_MAPPED_IMAGE RemoteMappedImage,
+    _In_ PPH_READ_VIRTUAL_MEMORY_CALLBACK ReadVirtualMemoryCallback,
+    _Out_ PULONG GuardFlags
+);
+
 typedef struct _PH_MAPPED_IMAGE_EXPORTS
 {
     PPH_MAPPED_IMAGE MappedImage;
@@ -351,7 +393,10 @@ typedef struct _IMAGE_CFG_ENTRY
     struct
     {
         BOOLEAN SuppressedCall : 1;
-        BOOLEAN Reserved : 7;
+        BOOLEAN ExportSuppressed : 1;
+        BOOLEAN LangExcptHandler : 1;
+        BOOLEAN Xfg : 1;
+        BOOLEAN Reserved : 4;
     };
 } IMAGE_CFG_ENTRY, *PIMAGE_CFG_ENTRY;
 
@@ -528,14 +573,6 @@ typedef struct _PH_MAPPED_IMAGE_DEBUG
 #define IMAGE_DEBUG_TYPE_PDBCHECKSUM 19
 #endif
 
-#ifndef IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS
-#define IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS 20
-#endif
-
-#ifndef IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT
-#define IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT 0x0001 // Image is CET compatible.
-#endif
-
 #ifndef _IMAGE_DEBUG_DIRECTORY_CODEVIEW
 typedef struct _IMAGE_DEBUG_DIRECTORY_CODEVIEW
 {
@@ -545,6 +582,14 @@ typedef struct _IMAGE_DEBUG_DIRECTORY_CODEVIEW
     CHAR ImageName[256];
 } IMAGE_DEBUG_DIRECTORY_CODEVIEW, *PIMAGE_DEBUG_DIRECTORY_CODEVIEW;
 #endif
+
+#ifndef IMAGE_GUARD_XFG_ENABLED
+#define IMAGE_GUARD_XFG_ENABLED 0x00800000 // Module was built with xfg
+#endif
+
+// IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT, Windows 20H1 and 21H1 have different values
+#define IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT_V1 0x00200000
+#define IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT_V2 0x00400000
 
 PHLIBAPI
 NTSTATUS
@@ -664,6 +709,20 @@ PhGetMappedArchiveImportEntry(
     _In_ PPH_MAPPED_ARCHIVE_MEMBER Member,
     _Out_ PPH_MAPPED_ARCHIVE_IMPORT_ENTRY Entry
     );
+
+typedef struct _PH_MAPPED_IMAGE_EH_CONT {
+    PULONGLONG EhContTable;
+    ULONGLONG NumberOfEhContEntries;
+    ULONG EntrySize;
+} PH_MAPPED_IMAGE_EH_CONT, * PPH_MAPPED_IMAGE_EH_CONT;
+
+PHLIBAPI
+NTSTATUS
+NTAPI
+PhGetMappedImageEhCont(
+    _Out_ PPH_MAPPED_IMAGE_EH_CONT EhContConfig,
+    _In_ PPH_MAPPED_IMAGE MappedImage
+);
 
 // ELF binary support
 
