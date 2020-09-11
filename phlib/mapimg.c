@@ -348,6 +348,7 @@ PIMAGE_SECTION_HEADER PhMappedImageRvaToSection(
     return NULL;
 }
 
+_Success_(return != NULL)
 PVOID PhMappedImageRvaToVa(
     _In_ PPH_MAPPED_IMAGE MappedImage,
     _In_ ULONG Rva,
@@ -368,13 +369,9 @@ PVOID PhMappedImageRvaToVa(
         PTR_SUB_OFFSET(Rva, section->VirtualAddress),
         section->PointerToRawData
         ));
-    //return PTR_ADD_OFFSET(
-    //    MappedImage->ViewBase, 
-    //    (Rva - section->VirtualAddress) +
-    //    section->PointerToRawData
-    //    );
 }
 
+_Success_(return != NULL)
 PVOID PhMappedImageVaToVa(
     _In_ PPH_MAPPED_IMAGE MappedImage,
     _In_ ULONG Va,
@@ -659,6 +656,7 @@ BOOLEAN PhGetRemoteMappedImageDirectoryEntry(
     NTSTATUS status;
     PIMAGE_DATA_DIRECTORY dataDirectory;
     PVOID dataBuffer;
+    ULONG dataLength;
 
     if (RemoteMappedImage->Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
     {
@@ -687,13 +685,17 @@ BOOLEAN PhGetRemoteMappedImageDirectoryEntry(
         return FALSE;
     }
 
-    dataBuffer = PhAllocate(dataDirectory->Size);
+    if (!(dataDirectory->VirtualAddress && dataDirectory->Size))
+        return FALSE;
+
+    dataLength = dataDirectory->Size;
+    dataBuffer = PhAllocate(dataLength);
 
     status = ReadVirtualMemoryCallback(
         ProcessHandle,
         PTR_ADD_OFFSET(RemoteMappedImage->ViewBase, dataDirectory->VirtualAddress),
         dataBuffer,
-        dataDirectory->Size,
+        dataLength,
         NULL
         );
 
@@ -703,10 +705,10 @@ BOOLEAN PhGetRemoteMappedImageDirectoryEntry(
         return FALSE;
     }
 
-    *DataBuffer = dataBuffer;
-
+    if (DataBuffer)
+        *DataBuffer = dataBuffer;
     if (DataLength)
-        *DataLength = dataDirectory->Size;
+        *DataLength = dataLength;
 
     return TRUE;
 }
