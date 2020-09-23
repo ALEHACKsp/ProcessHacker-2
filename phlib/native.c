@@ -1810,12 +1810,12 @@ NTSTATUS PhLoadDllProcess(
         )))
         goto FreeExit;
     
-    // Wait for the thread to finish.	
+    // Wait for the thread to finish.   
     status = NtWaitForSingleObject(threadHandle, FALSE, Timeout);
     NtClose(threadHandle);
 
 FreeExit:
-    // Size needs to be zero if we're freeing.	
+    // Size needs to be zero if we're freeing.  
     allocSize = 0;
     NtFreeVirtualMemory(
         ProcessHandle,
@@ -2124,9 +2124,8 @@ NTSTATUS PhSetEnvironmentVariableRemote(
     else
     {
 #endif
-        if (!NT_SUCCESS(status = NtQueueApcThreadEx(
+        if (!NT_SUCCESS(status = NtQueueApcThread(
             threadHandle,
-            NULL,
             setEnvironmentVariableW,
             nameBaseAddress,
             valueBaseAddress,
@@ -2916,14 +2915,30 @@ NTSTATUS PhpQueryFileVariableSize(
     return status;
 }
 
-NTSTATUS PhGetFileSize(
+NTSTATUS PhGetFileBasicInformation(
     _In_ HANDLE FileHandle,
-    _Out_ PLARGE_INTEGER Size
+    _Out_ PFILE_BASIC_INFORMATION BasicInfo
+    )
+{
+    IO_STATUS_BLOCK isb;
+
+    return NtQueryInformationFile(
+        FileHandle,
+        &isb,
+        BasicInfo,
+        sizeof(FILE_BASIC_INFORMATION),
+        FileBasicInformation
+        );
+}
+
+NTSTATUS PhGetFileStandardInformation(
+    _In_ HANDLE FileHandle,
+    _Out_ PFILE_STANDARD_INFORMATION StandardInfo
     )
 {
     NTSTATUS status;
-    FILE_STANDARD_INFORMATION standardInfo;
     IO_STATUS_BLOCK isb;
+    FILE_STANDARD_INFORMATION standardInfo;
 
     status = NtQueryInformationFile(
         FileHandle,
@@ -2933,10 +2948,31 @@ NTSTATUS PhGetFileSize(
         FileStandardInformation
         );
 
-    if (!NT_SUCCESS(status))
-        return status;
+    if (NT_SUCCESS(status))
+    {
+        *StandardInfo = standardInfo;
+    }
 
-    *Size = standardInfo.EndOfFile;
+    return status;
+}
+
+NTSTATUS PhGetFileSize(
+    _In_ HANDLE FileHandle,
+    _Out_ PLARGE_INTEGER Size
+    )
+{
+    NTSTATUS status;
+    FILE_STANDARD_INFORMATION standardInfo;
+
+    status = PhGetFileStandardInformation(
+        FileHandle,
+        &standardInfo
+        );
+
+    if (NT_SUCCESS(status))
+    {
+        *Size = standardInfo.EndOfFile;
+    }
 
     return status;
 }
@@ -3177,7 +3213,6 @@ NTSTATUS PhpQueryTransactionManagerVariableSize(
     return status;
 }
 
-_Success_(return == STATUS_SUCCESS)
 NTSTATUS PhGetTransactionManagerBasicInformation(
     _In_ HANDLE TransactionManagerHandle,
     _Out_ PTRANSACTIONMANAGER_BASIC_INFORMATION BasicInformation

@@ -631,7 +631,7 @@ VOID PhShowStatus(
         }
         else
         {
-            PhShowError(hWnd, L"Unable to perform the operation.");
+            PhShowError(hWnd, L"%s", L"Unable to perform the operation.");
         }
     }
 }
@@ -1359,7 +1359,7 @@ PPH_STRING PhFormatDateTime(
     timeBufferSize = GetTimeFormat(LOCALE_USER_DEFAULT, 0, DateTime, NULL, NULL, 0);
     dateBufferSize = GetDateFormat(LOCALE_USER_DEFAULT, 0, DateTime, NULL, NULL, 0);
 
-    string = PhCreateStringEx(NULL, (timeBufferSize + 1 + dateBufferSize) * sizeof(WCHAR));
+    string = PhCreateStringEx(NULL, ((SIZE_T)timeBufferSize + 1 + dateBufferSize) * sizeof(WCHAR));
 
     if (!GetTimeFormat(LOCALE_USER_DEFAULT, 0, DateTime, NULL, &string->Buffer[0], timeBufferSize))
     {
@@ -1751,6 +1751,7 @@ PVOID PhGetFileVersionInfoValue(
     return PTR_ADD_OFFSET(VersionInfo, ALIGN_UP(PTR_SUB_OFFSET(keyOffset, VersionInfo), ULONG));
 }
 
+_Success_(return)
 BOOLEAN PhGetFileVersionInfoKey(
     _In_ PVS_VERSION_INFO_STRUCT32 VersionInfo,
     _In_ ULONG KeyLength,
@@ -5900,81 +5901,6 @@ NTSTATUS PhAccessResource(
     return STATUS_SUCCESS;
 }
 
-NTSTATUS PhLoadLibraryAsImageResource(
-    _In_ PWSTR FileName,
-    _Out_ PVOID* DllBase
-    )
-{
-    NTSTATUS status;
-    HANDLE fileHandle;
-    HANDLE sectionHandle;
-    PVOID imageBaseAddress;
-    SIZE_T imageBaseLength;
-
-    status = PhCreateFileWin32(
-        &fileHandle,
-        FileName,
-        FILE_READ_DATA | SYNCHRONIZE,
-        FILE_ATTRIBUTE_NORMAL,
-        FILE_SHARE_READ | FILE_SHARE_DELETE,
-        FILE_OPEN,
-        FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT
-        );
-
-    if (!NT_SUCCESS(status))
-        return status;
-
-    status = NtCreateSection(
-        &sectionHandle,
-        SECTION_QUERY | SECTION_MAP_READ,
-        NULL,
-        NULL,
-        PAGE_READONLY,
-        SEC_IMAGE | SEC_NOCACHE,
-        fileHandle
-        );
-
-    NtClose(fileHandle);
-
-    if (!NT_SUCCESS(status))
-        return status;
-
-    imageBaseAddress = NULL;
-    imageBaseLength = 0;
-
-    status = NtMapViewOfSection(
-        sectionHandle,
-        NtCurrentProcess(),
-        &imageBaseAddress,
-        0,
-        0,
-        NULL,
-        &imageBaseLength,
-        ViewShare,
-        0,
-        PAGE_READONLY
-        );
-
-    NtClose(sectionHandle);
-
-    if (NT_SUCCESS(status))
-    {
-        if (DllBase)
-        {
-            *DllBase = imageBaseAddress;
-        }
-    }
-
-    return status;
-}
-
-VOID PhFreeLibraryAsImageResource(
-    _In_ PVOID DllBase
-    )
-{
-    NtUnmapViewOfSection(NtCurrentProcess(), DllBase);
-}
-
 _Success_(return)
 BOOLEAN PhLoadResource(
     _In_ PVOID DllBase,
@@ -6011,16 +5937,16 @@ PPH_STRING PhLoadString(
     _In_ ULONG ResourceId
     )
 {
+    ULONG resourceId = (LOWORD(ResourceId) >> 4) + 1;
+    PIMAGE_RESOURCE_DIR_STRING_U stringBuffer;
     PPH_STRING string = NULL;
     ULONG resourceLength;
     PVOID resourceBuffer;
     ULONG stringIndex;
-    PWSTR stringBuffer;
-    ULONG i;
 
     if (!PhLoadResource(
         DllBase,
-        MAKEINTRESOURCE((LOWORD(ResourceId) >> 4) + 1),
+        MAKEINTRESOURCE(resourceId),
         RT_STRING,
         &resourceLength,
         &resourceBuffer
@@ -6032,16 +5958,20 @@ PPH_STRING PhLoadString(
     stringBuffer = resourceBuffer;
     stringIndex = ResourceId & 0x000F;
 
-    for (i = 0; i < stringIndex; i++) // dmex: Copied from ReactOS.
+    for (ULONG i = 0; i < stringIndex; i++)
     {
-        stringBuffer += *stringBuffer + 1;
+        stringBuffer = PTR_ADD_OFFSET(stringBuffer, (stringBuffer->Length + sizeof(BYTE)) * sizeof(WCHAR));
     }
 
-    i = min(resourceLength - 1, *stringBuffer);
-
-    if (i > 0)
+    if (
+        stringBuffer->Length > 0 && // sizeof(UNICODE_NULL) || resourceLength
+        stringBuffer->Length < UNICODE_STRING_MAX_BYTES
+        )
     {
-        string = PhCreateStringEx(stringBuffer + 1, i * sizeof(WCHAR));
+        string = PhCreateStringEx(
+            stringBuffer->NameString,
+            stringBuffer->Length * sizeof(WCHAR)
+            );
     }
 
     PhFree(resourceBuffer);
@@ -6408,26 +6338,26 @@ NTSTATUS PhGetLoaderEntryImageNtHeaders(
     _Out_ PIMAGE_NT_HEADERS *ImageNtHeaders
     )
 {
-    PIMAGE_DOS_HEADER dosHeader;
-    PIMAGE_NT_HEADERS ntHeader;
-    ULONG ntHeadersOffset;
+    PIMAGE_DOS_HEADER imageDosHeader;
+    PIMAGE_NT_HEADERS imageNtHeaders;
+    ULONG imageNtHeadersOffset;
 
-    dosHeader = PTR_ADD_OFFSET(BaseAddress, 0);
+    imageDosHeader = PTR_ADD_OFFSET(BaseAddress, 0);
 
-    if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE)
-        return STATUS_IMAGE_SUBSYSTEM_NOT_PRESENT;
+    if (imageDosHeader->e_magic != IMAGE_DOS_SIGNATURE)
+        return STATUS_INVALID_IMAGE_NOT_MZ;
 
-    ntHeadersOffset = (ULONG)dosHeader->e_lfanew;
+    imageNtHeadersOffset = (ULONG)imageDosHeader->e_lfanew;
 
-    if (ntHeadersOffset == 0 || ntHeadersOffset >= 0x10000000)
-        return STATUS_IMAGE_SUBSYSTEM_NOT_PRESENT;
+    if (imageNtHeadersOffset == 0 || imageNtHeadersOffset >= LONG_MAX)
+        return STATUS_INVALID_IMAGE_FORMAT;
 
-    ntHeader = PTR_ADD_OFFSET(BaseAddress, ntHeadersOffset);
+    imageNtHeaders = PTR_ADD_OFFSET(BaseAddress, imageNtHeadersOffset);
 
-    if (ntHeader->Signature != IMAGE_NT_SIGNATURE)
-        return STATUS_IMAGE_SUBSYSTEM_NOT_PRESENT;
+    if (imageNtHeaders->Signature != IMAGE_NT_SIGNATURE)
+        return STATUS_INVALID_IMAGE_FORMAT;
 
-    *ImageNtHeaders = ntHeader;
+    *ImageNtHeaders = imageNtHeaders;
     return STATUS_SUCCESS;
 }
 

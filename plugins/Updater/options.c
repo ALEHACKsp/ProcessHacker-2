@@ -407,7 +407,14 @@ INT_PTR CALLBACK TextDlgProc(
                 context->CommitHash = PhGetPhVersionHash();
 
                 if (PhIsNullOrEmptyString(context->CommitHash) || PhEqualString2(context->CommitHash, L"\"\"", TRUE))
-                    PhMoveReference(&context->CommitHash, PhReferenceObject(((PPH_UPDATER_CONTEXT)lParam)->CommitHash)); // HACK
+                {
+                    PPH_UPDATER_CONTEXT updater = ((PPH_UPDATER_CONTEXT)lParam);
+
+                    if (!PhIsNullOrEmptyString(updater->CommitHash))
+                    {
+                        PhMoveReference(&context->CommitHash, PhReferenceObject(updater->CommitHash)); // HACK
+                    }
+                }
             }
 
             //PhSetWindowText(GetDlgItem(hwndDlg, IDC_TEXT), PhGetString(context->BuildMessage));
@@ -430,7 +437,9 @@ INT_PTR CALLBACK TextDlgProc(
             PhpUpdaterFreeListViewEntries(context);
 
             PhRemoveWindowContext(hwndDlg, PH_WINDOW_CONTEXT_DEFAULT);
+
             PhFree(context);
+            context = NULL;
         }
         break;
     case WM_SIZE:
@@ -673,7 +682,10 @@ INT_PTR CALLBACK TextDlgProc(
         break;
     }
 
-    REFLECT_MESSAGE_DLG(hwndDlg, context->ListViewHandle, uMsg, wParam, lParam);
+    if (context)
+    {
+        REFLECT_MESSAGE_DLG(hwndDlg, context->ListViewHandle, uMsg, wParam, lParam);
+    }
 
     return FALSE;
 }
