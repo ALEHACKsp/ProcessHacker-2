@@ -65,7 +65,7 @@ VOID EtInitializeDiskTab(
     memset(&page, 0, sizeof(PH_MAIN_TAB_PAGE));
     PhInitializeStringRef(&page.Name, L"Disk");
     page.Callback = EtpDiskPageCallback;
-    DiskPage = ProcessHacker_CreateTabPage(PhMainWndHandle, &page);
+    DiskPage = ProcessHacker_CreateTabPage(&page);
 
     if (ToolStatusInterface)
     {
@@ -594,13 +594,64 @@ BOOLEAN NTAPI EtpDiskTreeNewCallback(
                 getCellText->Text = PhGetStringRef(diskItem->FileNameWin32);
                 break;
             case ETDSTNC_READRATEAVERAGE:
-                EtFormatRate(diskItem->ReadAverage, &node->ReadRateAverageText, &getCellText->Text);
+                {
+                    ULONG64 number;
+
+                    number = diskItem->ReadAverage;
+                    number *= 1000;
+                    number /= PhGetIntegerSetting(L"UpdateInterval");
+
+                    if (number != 0)
+                    {
+                        PH_FORMAT format[2];
+
+                        PhInitFormatSize(&format[0], number);
+                        PhInitFormatS(&format[1], L"/s");
+
+                        PhMoveReference(&node->ReadRateAverageText, PhFormat(format, 2, 0));
+                        getCellText->Text = node->ReadRateAverageText->sr;
+                    }
+                }
                 break;
             case ETDSTNC_WRITERATEAVERAGE:
-                EtFormatRate(diskItem->WriteAverage, &node->WriteRateAverageText, &getCellText->Text);
+                {
+                    ULONG64 number;
+
+                    number = diskItem->WriteAverage;
+                    number *= 1000;
+                    number /= PhGetIntegerSetting(L"UpdateInterval");
+
+                    if (number != 0)
+                    {
+                        PH_FORMAT format[2];
+
+                        PhInitFormatSize(&format[0], number);
+                        PhInitFormatS(&format[1], L"/s");
+
+                        PhMoveReference(&node->WriteRateAverageText, PhFormat(format, 2, 0));
+                        getCellText->Text = node->WriteRateAverageText->sr;
+                    }
+                }
                 break;
             case ETDSTNC_TOTALRATEAVERAGE:
-                EtFormatRate(diskItem->ReadAverage + diskItem->WriteAverage, &node->TotalRateAverageText, &getCellText->Text);
+                {
+                    ULONG64 number;
+
+                    number = diskItem->ReadAverage + diskItem->WriteAverage;
+                    number *= 1000;
+                    number /= PhGetIntegerSetting(L"UpdateInterval");
+
+                    if (number != 0)
+                    {
+                        PH_FORMAT format[2];
+
+                        PhInitFormatSize(&format[0], number);
+                        PhInitFormatS(&format[1], L"/s");
+
+                        PhMoveReference(&node->TotalRateAverageText, PhFormat(format, 2, 0));
+                        getCellText->Text = node->TotalRateAverageText->sr;
+                    }
+                }
                 break;
             case ETDSTNC_IOPRIORITY:
                 switch (diskItem->IoPriority)
@@ -933,7 +984,7 @@ VOID EtHandleDiskCommand(
                     if ((processNode = PhFindProcessNode(diskItem->ProcessId)) &&
                         processNode->ProcessItem->CreateTime.QuadPart == diskItem->ProcessRecord->CreateTime.QuadPart)
                     {
-                        ProcessHacker_SelectTabPage(PhMainWndHandle, 0);
+                        ProcessHacker_SelectTabPage(0);
                         PhSelectAndEnsureVisibleProcessNode(processNode);
                     }
                     else
@@ -943,7 +994,7 @@ VOID EtHandleDiskCommand(
                 }
                 else
                 {
-                    PhShowError2(PhMainWndHandle, L"Unable to select the process.", L"%s", L"The process does not exist.");
+                    PhShowError2(WindowHandle, L"Unable to select the process.", L"%s", L"The process does not exist.");
                 }
 
                 PhDereferenceObject(diskItem);
@@ -968,7 +1019,7 @@ VOID EtHandleDiskCommand(
                     PhMoveReference(&fileName, PhSubstring(fileName, 0, streamIndex));
                 }
 
-                PhShellExploreFile(PhMainWndHandle, fileName->Buffer);
+                PhShellExploreFile(WindowHandle, fileName->Buffer);
                 PhDereferenceObject(fileName);
             }
         }
@@ -999,7 +1050,7 @@ VOID EtHandleDiskCommand(
                 if (PhDoesFileExistsWin32(PhGetString(fileName)))
                 {
                     PhShellExecuteUserString(
-                        PhMainWndHandle,
+                        WindowHandle,
                         L"ProgramInspectExecutables",
                         fileName->Buffer,
                         FALSE,
@@ -1029,7 +1080,7 @@ VOID EtHandleDiskCommand(
                     PhMoveReference(&fileName, PhSubstring(fileName, 0, streamIndex));
                 }
 
-                PhShellProperties(PhMainWndHandle, fileName->Buffer);
+                PhShellProperties(WindowHandle, fileName->Buffer);
                 PhDereferenceObject(fileName);
             }
         }
@@ -1167,7 +1218,7 @@ VOID NTAPI EtpDiskItemsUpdatedHandler(
     _In_opt_ PVOID Context
     )
 {
-    ProcessHacker_Invoke(PhMainWndHandle, EtpOnDiskItemsUpdated, EtRunCount);
+    ProcessHacker_Invoke(EtpOnDiskItemsUpdated, EtRunCount);
 }
 
 VOID NTAPI EtpOnDiskItemsUpdated(

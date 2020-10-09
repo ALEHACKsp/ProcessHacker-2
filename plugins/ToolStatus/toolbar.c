@@ -25,7 +25,7 @@
 
 SIZE ToolBarImageSize = { 16, 16 };
 HIMAGELIST ToolBarImageList = NULL;
-HFONT ToolStatusWindowFont = NULL;
+HFONT ToolbarWindowFont = NULL;
 TBBUTTON ToolbarButtons[MAX_TOOLBAR_ITEMS] =
 {
     // Default toolbar buttons (displayed)
@@ -116,10 +116,10 @@ VOID RebarLoadSettings(
 
         HFONT newFont;
 
-        if (newFont = (HFONT)SendMessage(PhMainWndHandle, WM_PH_GET_FONT, 0, 0))
+        if (newFont = ProcessHacker_GetFont())
         {
-            if (ToolStatusWindowFont) DeleteFont(ToolStatusWindowFont);
-            ToolStatusWindowFont = newFont;
+            if (ToolbarWindowFont) DeleteFont(ToolbarWindowFont);
+            ToolbarWindowFont = newFont;
         }
     }
 
@@ -161,7 +161,7 @@ VOID RebarLoadSettings(
         // Configure the toolbar imagelist.
         SendMessage(ToolBarHandle, TB_SETIMAGELIST, 0, (LPARAM)ToolBarImageList);
         // Configure the toolbar font.
-        SetWindowFont(ToolBarHandle, ToolStatusWindowFont, FALSE);
+        SetWindowFont(ToolBarHandle, ToolbarWindowFont, FALSE);
         // Resize the toolbar.
         SendMessage(ToolBarHandle, TB_AUTOSIZE, 0, 0);
 
@@ -176,6 +176,11 @@ VOID RebarLoadSettings(
         ProcessTreeFilterEntry = PhAddTreeNewFilter(PhGetFilterSupportProcessTreeList(), ProcessTreeFilterCallback, NULL);
         ServiceTreeFilterEntry = PhAddTreeNewFilter(PhGetFilterSupportServiceTreeList(), ServiceTreeFilterCallback, NULL);
         NetworkTreeFilterEntry = PhAddTreeNewFilter(PhGetFilterSupportNetworkTreeList(), NetworkTreeFilterCallback, NULL);
+
+        if (RebarHandle && PhGetIntegerSetting(L"EnableThemeSupport"))
+        {
+            PhInitializeWindowThemeRebar(RebarHandle);
+        }
 
         if (SearchboxHandle = CreateWindowEx(
             WS_EX_CLIENTEDGE,
@@ -206,6 +211,9 @@ VOID RebarLoadSettings(
             NULL,
             NULL
             );
+
+        // Configure the statusbar font.
+        SetWindowFont(StatusBarHandle, ToolbarWindowFont, FALSE);
 
         if (StatusBarHandle && PhGetIntegerSetting(L"EnableThemeSupport"))
         {

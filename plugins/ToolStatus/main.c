@@ -115,6 +115,8 @@ VOID NTAPI ProcessesUpdatedCallback(
 
     if (ToolStatusConfig.StatusBarEnabled)
         StatusBarUpdate(FALSE);
+
+    TaskbarUpdateGraphs();
 }
 
 VOID NTAPI TreeNewInitializingCallback(
@@ -1142,8 +1144,8 @@ LRESULT CALLBACK MainWndSubclassProc(
 
                         if (processNode)
                         {
-                            ProcessHacker_SelectTabPage(hWnd, 0);
-                            ProcessHacker_SelectProcessNode(hWnd, processNode);
+                            ProcessHacker_SelectTabPage(0);
+                            ProcessHacker_SelectProcessNode(processNode);
                         }
 
                         switch (TargetingMode)
@@ -1218,7 +1220,7 @@ LRESULT CALLBACK MainWndSubclassProc(
         break;
     case WM_SIZE:
         // Resize PH main window client-area.
-        ProcessHacker_InvalidateLayoutPadding(hWnd);
+        ProcessHacker_InvalidateLayoutPadding();
         break;
     case WM_SETTINGCHANGE:
         {
@@ -1282,13 +1284,13 @@ LRESULT CALLBACK MainWndSubclassProc(
             // Let Process Hacker perform the default processing.
             CallWindowProc(MainWindowHookProc, hWnd, uMsg, wParam, lParam);
 
-            if (newFont = (HFONT)SendMessage(hWnd, WM_PH_GET_FONT, 0, 0))
+            if (newFont = ProcessHacker_GetFont())
             {
-                if (ToolStatusWindowFont) DeleteFont(ToolStatusWindowFont);
-                ToolStatusWindowFont = newFont;
+                if (ToolbarWindowFont) DeleteFont(ToolbarWindowFont);
+                ToolbarWindowFont = newFont;
 
-                SetWindowFont(ToolBarHandle, ToolStatusWindowFont, TRUE);
-                SetWindowFont(StatusBarHandle, ToolStatusWindowFont, TRUE);
+                SetWindowFont(ToolBarHandle, ToolbarWindowFont, TRUE);
+                SetWindowFont(StatusBarHandle, ToolbarWindowFont, TRUE);
 
                 ToolbarLoadSettings();
             }
@@ -1309,9 +1311,11 @@ VOID NTAPI MainWindowShowingCallback(
     _In_opt_ PVOID Context
     )
 {
+    AcceleratorTable = LoadAccelerators(PluginInstance->DllBase, MAKEINTRESOURCE(IDR_MAINWND_ACCEL));
     PhRegisterMessageLoopFilter(MessageLoopFilter, NULL);
+
     PhRegisterCallback(
-        ProcessHacker_GetCallbackLayoutPadding(PhMainWndHandle),
+        ProcessHacker_GetCallbackLayoutPadding(),
         LayoutPaddingCallback,
         NULL,
         &LayoutPaddingCallbackRegistration
@@ -1384,10 +1388,12 @@ VOID NTAPI LoadCallback(
     )
 {
     ToolStatusConfig.Flags = PhGetIntegerSetting(SETTING_NAME_TOOLSTATUS_CONFIG);
-    DisplayStyle = (TOOLBAR_DISPLAY_STYLE)PhGetIntegerSetting(SETTING_NAME_TOOLBARDISPLAYSTYLE);
-    SearchBoxDisplayMode = (SEARCHBOX_DISPLAY_MODE)PhGetIntegerSetting(SETTING_NAME_SEARCHBOXDISPLAYMODE);
+    DisplayStyle = PhGetIntegerSetting(SETTING_NAME_TOOLBARDISPLAYSTYLE);
+    SearchBoxDisplayMode = PhGetIntegerSetting(SETTING_NAME_SEARCHBOXDISPLAYMODE);
+    TaskbarListIconType = PhGetIntegerSetting(SETTING_NAME_TASKBARDISPLAYSTYLE);
     EnableThemeSupport = !!PhGetIntegerSetting(L"EnableThemeSupport");
     UpdateGraphs = !PhGetIntegerSetting(L"StartHidden");
+    TabInfoHashtable = PhCreateSimpleHashtable(3);
 
     ToolbarGraphsInitialize();
 }
@@ -1541,13 +1547,13 @@ LOGICAL DllMain(
             PH_SETTING_CREATE settings[] =
             {
                 { IntegerSettingType, SETTING_NAME_TOOLSTATUS_CONFIG, L"1F" },
-                { IntegerSettingType, SETTING_NAME_TOOLBAR_THEME, L"0" },
                 { IntegerSettingType, SETTING_NAME_TOOLBARDISPLAYSTYLE, L"1" },
                 { IntegerSettingType, SETTING_NAME_SEARCHBOXDISPLAYMODE, L"0" },
+                { IntegerSettingType, SETTING_NAME_TASKBARDISPLAYSTYLE, L"0" },
                 { StringSettingType, SETTING_NAME_REBAR_CONFIG, L"" },
                 { StringSettingType, SETTING_NAME_TOOLBAR_CONFIG, L"" },
                 { StringSettingType, SETTING_NAME_STATUSBAR_CONFIG, L"" },
-                { StringSettingType, SETTING_NAME_TOOLBAR_GRAPH_CONFIG, L"" }
+                { StringSettingType, SETTING_NAME_TOOLBAR_GRAPH_CONFIG, L"" },
             };
 
             PluginInstance = PhRegisterPlugin(PLUGIN_NAME, Instance, &info);
@@ -1622,14 +1628,7 @@ LOGICAL DllMain(
                 &NetworkTreeNewInitializingCallbackRegistration
                 );
 
-            PhAddSettings(settings, ARRAYSIZE(settings));
-
-            AcceleratorTable = LoadAccelerators(
-                Instance,
-                MAKEINTRESOURCE(IDR_MAINWND_ACCEL)
-                );
-
-            TabInfoHashtable = PhCreateSimpleHashtable(3);
+            PhAddSettings(settings, RTL_NUMBER_OF(settings));
         }
         break;
     }

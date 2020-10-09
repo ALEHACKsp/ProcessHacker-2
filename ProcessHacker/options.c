@@ -380,7 +380,7 @@ INT_PTR CALLBACK PhOptionsDialogProc(
                         L""
                         ) == IDYES)
                     {
-                        ProcessHacker_PrepareForEarlyShutdown(PhMainWndHandle);
+                        ProcessHacker_PrepareForEarlyShutdown();
 
                         PhResetSettings();
 
@@ -396,7 +396,7 @@ INT_PTR CALLBACK PhOptionsDialogProc(
                             0,
                             NULL
                             );
-                        ProcessHacker_Destroy(PhMainWndHandle);
+                        ProcessHacker_Destroy();
                     }
                 }
                 break;
@@ -724,12 +724,40 @@ static BOOLEAN GetCurrentFont(
     return result;
 }
 
+typedef struct _PHP_HKURUN_ENTRY
+{
+    PPH_STRING Value;
+    //PPH_STRING Name;
+} PHP_HKURUN_ENTRY, *PPHP_HKURUN_ENTRY;
+
+BOOLEAN NTAPI PhpReadCurrentRunCallback(
+    _In_ HANDLE RootDirectory,
+    _In_ PKEY_VALUE_FULL_INFORMATION Information,
+    _In_opt_ PVOID Context
+    )
+{
+    if (Context && Information->Type == REG_SZ)
+    {
+        PHP_HKURUN_ENTRY entry;
+
+        if (Information->DataLength > sizeof(UNICODE_NULL))
+            entry.Value = PhCreateStringEx(PTR_ADD_OFFSET(Information, Information->DataOffset), Information->DataLength);
+        else
+            entry.Value = PhReferenceEmptyString();
+
+        //entry.Name = PhCreateStringEx(Information->Name, Information->NameLength);
+
+        PhAddItemArray(Context, &entry);
+    }
+
+    return TRUE;
+}
+
 static VOID ReadCurrentUserRun(
     VOID
     )
 {
     HANDLE keyHandle;
-    PPH_STRING value;
 
     CurrentUserRunPresent = FALSE;
 
@@ -741,18 +769,26 @@ static VOID ReadCurrentUserRun(
         0
         )))
     {
-        if (value = PhQueryRegistryString(keyHandle, L"Process Hacker"))
+        PH_ARRAY keyEntryArray;
+
+        PhInitializeArray(&keyEntryArray, sizeof(PHP_HKURUN_ENTRY), 20);
+        PhEnumerateValueKey(keyHandle, KeyValueFullInformation, PhpReadCurrentRunCallback, &keyEntryArray);
+
+        for (SIZE_T i = 0; i < keyEntryArray.Count; i++)
         {
+            PPHP_HKURUN_ENTRY entry = PhItemArray(&keyEntryArray, i);
             PH_STRINGREF fileName;
             PH_STRINGREF arguments;
             PPH_STRING fullFileName;
             PPH_STRING applicationFileName;
 
-            if (PhParseCommandLineFuzzy(&value->sr, &fileName, &arguments, &fullFileName))
+            if (PhParseCommandLineFuzzy(&entry->Value->sr, &fileName, &arguments, &fullFileName))
             {
                 if (applicationFileName = PhGetApplicationFileName())
                 {
-                    if (fullFileName && PhEqualString(fullFileName, applicationFileName, TRUE))
+                    PhMoveReference(&applicationFileName, PhGetBaseName(applicationFileName));
+
+                    if (fullFileName && PhEndsWithString(fullFileName, applicationFileName, TRUE))
                     {
                         CurrentUserRunPresent = TRUE;
                     }
@@ -763,8 +799,10 @@ static VOID ReadCurrentUserRun(
                 if (fullFileName) PhDereferenceObject(fullFileName);
             }
 
-            PhDereferenceObject(value);
+            PhDereferenceObject(entry->Value);
         }
+
+        PhDeleteArray(&keyEntryArray);
 
         NtClose(keyHandle);
     }
@@ -1076,7 +1114,7 @@ static VOID PhpOptionsNotifyChangeCallback(
     )
 {
     PhUpdateCachedSettings();
-    ProcessHacker_SaveAllSettings(PhMainWndHandle);
+    ProcessHacker_SaveAllSettings();
     PhInvalidateAllProcessNodes();
     PhReloadSettingsProcessTreeList();
     PhSiNotifyChangeSettings();
@@ -1093,7 +1131,7 @@ static VOID PhpOptionsNotifyChangeCallback(
             L"Do you want to restart Process Hacker now?"
             ) == IDYES)
         {
-            ProcessHacker_PrepareForEarlyShutdown(PhMainWndHandle);
+            ProcessHacker_PrepareForEarlyShutdown();
             PhShellProcessHacker(
                 PhMainWndHandle,
                 L"-v",
@@ -1103,7 +1141,7 @@ static VOID PhpOptionsNotifyChangeCallback(
                 0,
                 NULL
                 );
-            ProcessHacker_Destroy(PhMainWndHandle);
+            ProcessHacker_Destroy();
         }
     }
 }
@@ -1171,7 +1209,7 @@ static VOID PhpAdvancedPageSave(
         ListView_GetCheckState(listViewHandle, PHP_OPTIONS_INDEX_START_HIDDEN) == BST_CHECKED
         );
 
-    ProcessHacker_Invoke(PhMainWndHandle, PhpOptionsNotifyChangeCallback, NULL);
+    ProcessHacker_Invoke(PhpOptionsNotifyChangeCallback, NULL);
 }
 
 static NTSTATUS PhpElevateAdvancedThreadStart(
@@ -1293,7 +1331,7 @@ INT_PTR CALLBACK PhpOptionsGeneralDlgProc(
             if (NewFontSelection)
             {
                 PhSetStringSetting2(L"Font", &NewFontSelection->sr);
-                PostMessage(PhMainWndHandle, WM_PH_UPDATE_FONT, 0, 0);
+                ProcessHacker_UpdateFont();
             }
 
             PhpAdvancedPageSave(hwndDlg);
@@ -1324,7 +1362,7 @@ INT_PTR CALLBACK PhpOptionsGeneralDlgProc(
                         // Can't get LOGFONT from the existing setting, probably
                         // because the user hasn't ever chosen a font before.
                         // Set the font to something familiar.
-                        GetObject((HFONT)SendMessage(PhMainWndHandle, WM_PH_GET_FONT, 0, 0), sizeof(LOGFONT), &font);
+                        GetObject(ProcessHacker_GetFont(), sizeof(LOGFONT), &font);
                     }
 
                     memset(&chooseFont, 0, sizeof(CHOOSEFONT));
