@@ -1731,7 +1731,7 @@ NTSTATUS PhLoadDllProcess(
 
     if (isWow64)
     {
-        if (!NT_SUCCESS(status = PhLoadMappedImage(FileName, NULL, TRUE, &mappedImage)))
+        if (!NT_SUCCESS(status = PhLoadMappedImage(FileName, NULL, &mappedImage)))
             return status;
 
         isModule32 = mappedImage.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC;
@@ -4751,7 +4751,7 @@ NTSTATUS PhGetProcedureAddressRemote(
     PH_MAPPED_IMAGE_EXPORTS exports;
     GET_PROCEDURE_ADDRESS_REMOTE_CONTEXT context;
 
-    if (!NT_SUCCESS(status = PhLoadMappedImage(FileName, NULL, TRUE, &mappedImage)))
+    if (!NT_SUCCESS(status = PhLoadMappedImage(FileName, NULL, &mappedImage)))
         return status;
 
     PhInitializeStringRef(&context.FileName, FileName);
@@ -5539,6 +5539,32 @@ BOOLEAN NTAPI PhpIsDotNetEnumProcessModulesCallback(
     return TRUE;
 }
 
+typedef struct _PHP_PIPE_NAME_HASH
+{
+    ULONG Hash;
+} PHP_PIPE_NAME_HASH, *PPHP_PIPE_NAME_HASH;
+
+static BOOLEAN NTAPI PhpDotNetCorePipeHashCallback(
+    _In_ PVOID Information,
+    _In_opt_ PVOID Context
+    )
+{
+    PFILE_DIRECTORY_INFORMATION fileInfo = Information;
+    PHP_PIPE_NAME_HASH objectPipe;
+    PH_STRINGREF objectName;
+
+    if (!Context)
+        return FALSE;
+
+    objectName.Length = fileInfo->FileNameLength;
+    objectName.Buffer = fileInfo->FileName;
+    objectPipe.Hash = PhHashStringRef(&objectName, TRUE);
+
+    PhAddItemArray(Context, &objectPipe);
+
+    return TRUE;
+}
+
 /**
  * Determines if a process is managed.
  *
@@ -5568,7 +5594,6 @@ NTSTATUS PhGetProcessIsDotNetEx(
         NTSTATUS status;
         HANDLE sectionHandle;
         SIZE_T returnLength;
-        FILE_BASIC_INFORMATION fileInfo;
         OBJECT_ATTRIBUTES objectAttributes;
         UNICODE_STRING objectNameUs;
         PH_STRINGREF objectNameSr;
@@ -5581,7 +5606,7 @@ NTSTATUS PhGetProcessIsDotNetEx(
         // for the existence of that section object. This means:
         // * Better performance.
         // * No need for admin rights to get .NET status of processes owned by other users.
-   
+
         // Version 4 section object
 
         PhInitFormatS(&format[0], L"\\BaseNamedObjects\\Cor_Private_IPCBlock_v4_");
@@ -5670,35 +5695,91 @@ NTSTATUS PhGetProcessIsDotNetEx(
             return STATUS_SUCCESS;
         }
 
-        // .NET Core 3.0
+        // .NET Core 3.0/.NET 5.0
 
-        PhInitFormatS(&format[0], DEVICE_NAMED_PIPE L"dotnet-diagnostic-");
+        PhInitFormatS(&format[0], L"dotnet-diagnostic-");
         PhInitFormatU(&format[1], HandleToUlong(ProcessId));
 
         if (PhFormatToBuffer(format, RTL_NUMBER_OF(format), formatBuffer, sizeof(formatBuffer), &returnLength))
         {
+            HANDLE directoryHandle;
+            IO_STATUS_BLOCK isb;
+            ULONG pipeNameHash;
+            PH_ARRAY pipeArray;
+
             objectNameSr.Length = returnLength - sizeof(UNICODE_NULL);
             objectNameSr.Buffer = formatBuffer;
+            pipeNameHash = PhHashStringRef(&objectNameSr, TRUE);
 
-            PhStringRefToUnicodeString(&objectNameSr, &objectNameUs);
+            RtlInitUnicodeString(&objectNameUs, DEVICE_NAMED_PIPE);
+            InitializeObjectAttributes(
+                &objectAttributes,
+                &objectNameUs,
+                OBJ_CASE_INSENSITIVE,
+                NULL,
+                NULL
+                );
+
+            status = NtOpenFile(
+                &directoryHandle,
+                GENERIC_READ | SYNCHRONIZE,
+                &objectAttributes,
+                &isb,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                FILE_SYNCHRONOUS_IO_NONALERT
+                );
+
+            if (NT_SUCCESS(status))
+            {
+                PhInitializeArray(&pipeArray, sizeof(PHP_PIPE_NAME_HASH), 512);
+
+                status = PhEnumDirectoryFile(
+                    directoryHandle,
+                    NULL,
+                    PhpDotNetCorePipeHashCallback,
+                    &pipeArray
+                    );
+
+                if (NT_SUCCESS(status))
+                {
+                    status = STATUS_UNSUCCESSFUL;
+
+                    for (ULONG i = 0; i < pipeArray.Count; i++)
+                    {
+                        PPHP_PIPE_NAME_HASH entry = PhItemArray(&pipeArray, i);
+
+                        if (entry->Hash == pipeNameHash)
+                        {
+                            status = STATUS_SUCCESS;
+                            break;
+                        }
+                    }
+                }
+
+                PhDeleteArray(&pipeArray);
+                NtClose(directoryHandle);
+            }
+
+            // NOTE: The .NET 5 process diagnostics are disabled when querying the pipe file attributes. The pipe will return STATUS_PIPE_NOT_AVAILABLE
+            // for all callers until restarting the process. This also prevents dotnet-counters, dotnet-diagnostics and other tools from working. (dmex)
+            //
+            //FILE_BASIC_INFORMATION fileInfo;
+            //
+            //objectNameSr.Length = returnLength - sizeof(UNICODE_NULL);
+            //objectNameSr.Buffer = formatBuffer;
+            //
+            //PhStringRefToUnicodeString(&objectNameSr, &objectNameUs);
+            //InitializeObjectAttributes(
+            //    &objectAttributes,
+            //    &objectNameUs,
+            //    OBJ_CASE_INSENSITIVE,
+            //    NULL,
+            //    NULL
+            //    );
+            //
+            //status = NtQueryAttributesFile(&objectAttributes, &fileInfo)
+            //status == STATUS_PIPE_NOT_AVAILABLE ? status = STATUS_SUCCESS;
         }
-        else
-        {
-            RtlInitEmptyUnicodeString(&objectNameUs, NULL, 0);
-        }
-
-        InitializeObjectAttributes(
-            &objectAttributes,
-            &objectNameUs,
-            OBJ_CASE_INSENSITIVE,
-            NULL,
-            NULL
-            );
-
-        status = NtQueryAttributesFile( // TODO: Remove (dmex)
-            &objectAttributes,
-            &fileInfo
-            );
 
         if (NT_SUCCESS(status))
         {
@@ -8264,7 +8345,7 @@ static BOOLEAN PhpDeleteDirectoryCallback(
     _In_opt_ PVOID Context
     )
 {
-    static PH_STRINGREF directorySeparator = PH_STRINGREF_INIT(L"\\");
+    static PH_STRINGREF separator = PH_STRINGREF_INIT(L"\\");
     PPH_STRING parentDirectory = Context;
     PPH_STRING fullName;
     PH_STRINGREF baseName;
@@ -8280,7 +8361,7 @@ static BOOLEAN PhpDeleteDirectoryCallback(
 
     fullName = PhConcatStringRef3(
         &parentDirectory->sr,
-        &directorySeparator,
+        &separator,
         &baseName
         );
 
@@ -8901,6 +8982,203 @@ NTSTATUS PhImpersonateClientOfNamedPipe(
         NULL,
         0
         );
+}
+
+NTSTATUS PhGetNamedPipeClientComputerName(
+    _In_ HANDLE PipeHandle,
+    _In_ ULONG ClientComputerNameLength,
+    _Out_ PVOID ClientComputerName
+    )
+{
+    NTSTATUS status;
+    IO_STATUS_BLOCK isb;
+
+    status = NtFsControlFile(
+        PipeHandle,
+        NULL,
+        NULL,
+        NULL,
+        &isb,
+        FSCTL_PIPE_GET_CONNECTION_ATTRIBUTE,
+        "ClientComputerName",
+        sizeof("ClientComputerName"),
+        ClientComputerName,
+        ClientComputerNameLength
+        );
+
+    if (status == STATUS_PENDING)
+    {
+        status = NtWaitForSingleObject(PipeHandle, FALSE, NULL);
+
+        if (NT_SUCCESS(status))
+            status = isb.Status;
+    }
+
+    return status;
+}
+
+NTSTATUS PhGetNamedPipeClientProcessId(
+    _In_ HANDLE PipeHandle,
+    _Out_ PHANDLE ClientProcessId
+    )
+{
+    NTSTATUS status;
+    IO_STATUS_BLOCK isb;
+    ULONG processId = 0;
+
+    status = NtFsControlFile(
+        PipeHandle,
+        NULL,
+        NULL,
+        NULL,
+        &isb,
+        FSCTL_PIPE_GET_CONNECTION_ATTRIBUTE,
+        "ClientProcessId",
+        sizeof("ClientProcessId"),
+        &processId,
+        sizeof(ULONG)
+        );
+
+    if (status == STATUS_PENDING)
+    {
+        status = NtWaitForSingleObject(PipeHandle, FALSE, NULL);
+
+        if (NT_SUCCESS(status))
+            status = isb.Status;
+    }
+
+    if (NT_SUCCESS(status))
+    {
+        if (ClientProcessId)
+        {
+            *ClientProcessId = UlongToHandle(processId);
+        }
+    }
+
+    return status;
+}
+
+NTSTATUS PhGetNamedPipeClientSessionId(
+    _In_ HANDLE PipeHandle,
+    _Out_ PHANDLE ClientSessionId
+    )
+{
+    NTSTATUS status;
+    IO_STATUS_BLOCK isb;
+    ULONG processId = 0;
+
+    status = NtFsControlFile(
+        PipeHandle,
+        NULL,
+        NULL,
+        NULL,
+        &isb,
+        FSCTL_PIPE_GET_CONNECTION_ATTRIBUTE,
+        "ClientSessionId",
+        sizeof("ClientSessionId"),
+        &processId,
+        sizeof(ULONG)
+        );
+
+    if (status == STATUS_PENDING)
+    {
+        status = NtWaitForSingleObject(PipeHandle, FALSE, NULL);
+
+        if (NT_SUCCESS(status))
+            status = isb.Status;
+    }
+
+    if (NT_SUCCESS(status))
+    {
+        if (ClientSessionId)
+        {
+            *ClientSessionId = UlongToHandle(processId);
+        }
+    }
+
+    return status;
+}
+
+NTSTATUS PhGetNamedPipeServerProcessId(
+    _In_ HANDLE PipeHandle,
+    _Out_ PHANDLE ServerProcessId
+    )
+{
+    NTSTATUS status;
+    IO_STATUS_BLOCK isb;
+    ULONG processId = 0;
+
+    status = NtFsControlFile(
+        PipeHandle,
+        NULL,
+        NULL,
+        NULL,
+        &isb,
+        FSCTL_PIPE_GET_PIPE_ATTRIBUTE,
+        "ServerProcessId",
+        sizeof("ServerProcessId"),
+        &processId,
+        sizeof(ULONG)
+        );
+
+    if (status == STATUS_PENDING)
+    {
+        status = NtWaitForSingleObject(PipeHandle, FALSE, NULL);
+
+        if (NT_SUCCESS(status))
+            status = isb.Status;
+    }
+
+    if (NT_SUCCESS(status))
+    {
+        if (ServerProcessId)
+        {
+            *ServerProcessId = UlongToHandle(processId);
+        }
+    }
+
+    return status;
+}
+
+NTSTATUS PhGetNamedPipeServerSessionId(
+    _In_ HANDLE PipeHandle,
+    _Out_ PHANDLE ServerSessionId
+    )
+{
+    NTSTATUS status;
+    IO_STATUS_BLOCK isb;
+    ULONG processId = 0;
+
+    status = NtFsControlFile(
+        PipeHandle,
+        NULL,
+        NULL,
+        NULL,
+        &isb,
+        FSCTL_PIPE_GET_PIPE_ATTRIBUTE,
+        "ServerSessionId",
+        sizeof("ServerSessionId"),
+        &processId,
+        sizeof(ULONG)
+        );
+
+    if (status == STATUS_PENDING)
+    {
+        status = NtWaitForSingleObject(PipeHandle, FALSE, NULL);
+
+        if (NT_SUCCESS(status))
+            status = isb.Status;
+    }
+
+    if (NT_SUCCESS(status))
+    {
+        if (ServerSessionId)
+        {
+            *ServerSessionId = UlongToHandle(processId);
+        }
+    }
+
+    return status;
 }
 
 NTSTATUS PhGetThreadName(
