@@ -2218,6 +2218,62 @@ NTSTATUS PhGetJobProcessIdList(
     return status;
 }
 
+NTSTATUS PhGetJobBasicAndIoAccounting(
+    _In_ HANDLE JobHandle,
+    _Out_ PJOBOBJECT_BASIC_AND_IO_ACCOUNTING_INFORMATION BasicAndIoAccounting
+    )
+{
+    return NtQueryInformationJobObject(
+        JobHandle,
+        JobObjectBasicAndIoAccountingInformation,
+        BasicAndIoAccounting,
+        sizeof(JOBOBJECT_BASIC_AND_IO_ACCOUNTING_INFORMATION),
+        NULL
+        );
+}
+
+NTSTATUS PhGetJobBasicLimits(
+    _In_ HANDLE JobHandle,
+    _Out_ PJOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimits
+    )
+{
+    return NtQueryInformationJobObject(
+        JobHandle,
+        JobObjectBasicLimitInformation,
+        BasicLimits,
+        sizeof(JOBOBJECT_BASIC_LIMIT_INFORMATION),
+        NULL
+        );
+}
+
+NTSTATUS PhGetJobExtendedLimits(
+    _In_ HANDLE JobHandle,
+    _Out_ PJOBOBJECT_EXTENDED_LIMIT_INFORMATION ExtendedLimits
+    )
+{
+    return NtQueryInformationJobObject(
+        JobHandle,
+        JobObjectExtendedLimitInformation,
+        ExtendedLimits,
+        sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION),
+        NULL
+        );
+}
+
+NTSTATUS PhGetJobBasicUiRestrictions(
+    _In_ HANDLE JobHandle,
+    _Out_ PJOBOBJECT_BASIC_UI_RESTRICTIONS BasicUiRestrictions
+    )
+{
+    return NtQueryInformationJobObject(
+        JobHandle,
+        JobObjectBasicUIRestrictions,
+        BasicUiRestrictions,
+        sizeof(JOBOBJECT_BASIC_UI_RESTRICTIONS),
+        NULL
+        );
+}
+
 /**
  * Queries variable-sized information for a token. The function allocates a buffer to contain the
  * information.
@@ -7443,7 +7499,7 @@ NTSTATUS PhLoadAppKey(
     UNICODE_STRING guidStringUs;
     OBJECT_ATTRIBUTES targetAttributes;
     OBJECT_ATTRIBUTES sourceAttributes;
-    WCHAR objectNameBuffer[MAX_PATH];
+    WCHAR objectNameBuffer[MAX_PATH] = L"";
 
     RtlInitEmptyUnicodeString(&objectName, objectNameBuffer, sizeof(objectNameBuffer));
 
@@ -7992,6 +8048,7 @@ NTSTATUS PhCreateFile(
 
     return status;
 }
+
 NTSTATUS PhOpenFileWin32(
     _Out_ PHANDLE FileHandle,
     _In_ PWSTR FileName,
@@ -8632,7 +8689,6 @@ NTSTATUS PhCreateNamedPipe(
 
     pipeName = PhConcatStrings2(DEVICE_NAMED_PIPE, PipeName);
     PhStringRefToUnicodeString(&pipeName->sr, &pipeNameUs);
-    PhTimeoutFromMilliseconds(&pipeTimeout, 500);
 
     InitializeObjectAttributes(
         &objectAttributes,
@@ -8663,10 +8719,10 @@ NTSTATUS PhCreateNamedPipe(
         FILE_PIPE_MESSAGE_TYPE,
         FILE_PIPE_MESSAGE_MODE,
         FILE_PIPE_QUEUE_OPERATION,
-        ULONG_MAX,
+        FILE_PIPE_UNLIMITED_INSTANCES,
         PAGE_SIZE,
         PAGE_SIZE,
-        &pipeTimeout
+        PhTimeoutFromMilliseconds(&pipeTimeout, 1000)
         );
 
     if (NT_SUCCESS(status))
@@ -8852,6 +8908,66 @@ NTSTATUS PhPeekNamedPipe(
     }
 
     PhFree(peekBuffer);
+
+    return status;
+}
+
+NTSTATUS PhCallNamedPipe(
+    _In_ PWSTR PipeName,
+    _In_reads_bytes_(InputBufferLength) PVOID InputBuffer,
+    _In_ ULONG InputBufferLength,
+    _Out_writes_bytes_(OutputBufferLength) PVOID OutputBuffer,
+    _In_ ULONG OutputBufferLength
+    )
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    HANDLE pipeHandle = NULL;
+
+    status = PhConnectPipe(&pipeHandle, PipeName);
+
+    if (!NT_SUCCESS(status))
+    {
+        PhWaitForNamedPipe(PipeName, 1000);
+
+        status = PhConnectPipe(&pipeHandle, PipeName);
+    }
+
+    if (NT_SUCCESS(status))
+    {
+        FILE_PIPE_INFORMATION pipeInfo;
+        IO_STATUS_BLOCK isb;
+
+        memset(&pipeInfo, 0, sizeof(FILE_PIPE_INFORMATION));
+        pipeInfo.CompletionMode = FILE_PIPE_QUEUE_OPERATION;
+        pipeInfo.ReadMode = FILE_PIPE_MESSAGE_MODE;
+
+        status = NtSetInformationFile(
+            pipeHandle,
+            &isb,
+            &pipeInfo,
+            sizeof(FILE_PIPE_INFORMATION),
+            FilePipeInformation
+            );
+    }
+
+    if (NT_SUCCESS(status))
+    {
+        status = PhTransceiveNamedPipe(
+            pipeHandle,
+            InputBuffer,
+            InputBufferLength,
+            OutputBuffer,
+            OutputBufferLength
+            );
+    }
+
+    if (pipeHandle)
+    {
+        //IO_STATUS_BLOCK isb;
+        //NtFlushBuffersFile(pipeHandle, &isb);
+        PhDisconnectNamedPipe(pipeHandle);
+        NtClose(pipeHandle);
+    }
 
     return status;
 }
